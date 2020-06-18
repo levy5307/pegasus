@@ -540,8 +540,35 @@ inline bool parse_app_perf_counter_name(const std::string &name,
 
 struct row_data
 {
-    row_data() = default;
-    row_data(const std::string &name) : row_name(name) {}
+    explicit row_data(const std::string &name) : row_name(name) {
+        row_data();
+    }
+
+    static const std::vector<std::string>& get_base_metric_names() {
+        static std::vector<std::string> base_metric_names{"get_qps"};
+        return base_metric_names;
+    }
+
+    row_data() {
+        /// todo: add more counter_names,
+        const std::vector<std::string>& base_metric_names = get_base_metric_names();
+        for (auto name : base_metric_names) {
+            counter_name_value_map[name] = 0;
+        }
+    }
+
+    const row_data& calculate_composite_metrics() {
+        /// and some caculated results
+        /// (for example: total read qps / total write qps) into it
+        static std::vector<std::string> complex_metric_names{"total_read_qps"};
+
+        /// todo
+        return *this;
+    }
+
+    const std::map<std::string, double>& get_all_metrics() const {
+        return counter_name_value_map;
+    }
 
     double get_total_read_qps() const { return get_qps + multi_get_qps + scan_qps; }
 
@@ -569,43 +596,17 @@ struct row_data
 
     void aggregate(const row_data &row)
     {
-        get_qps += row.get_qps;
-        multi_get_qps += row.multi_get_qps;
-        put_qps += row.put_qps;
-        multi_put_qps += row.multi_put_qps;
-        remove_qps += row.remove_qps;
-        multi_remove_qps += row.multi_remove_qps;
-        incr_qps += row.incr_qps;
-        check_and_set_qps += row.check_and_set_qps;
-        check_and_mutate_qps += row.check_and_mutate_qps;
-        scan_qps += row.scan_qps;
-        recent_read_cu += row.recent_read_cu;
-        recent_write_cu += row.recent_write_cu;
-        recent_expire_count += row.recent_expire_count;
-        recent_filter_count += row.recent_filter_count;
-        recent_abnormal_count += row.recent_abnormal_count;
-        recent_write_throttling_delay_count += row.recent_write_throttling_delay_count;
-        recent_write_throttling_reject_count += row.recent_write_throttling_reject_count;
-        storage_mb += row.storage_mb;
-        storage_count += row.storage_count;
-        rdb_block_cache_hit_count += row.rdb_block_cache_hit_count;
-        rdb_block_cache_total_count += row.rdb_block_cache_total_count;
-        rdb_index_and_filter_blocks_mem_usage += row.rdb_index_and_filter_blocks_mem_usage;
-        rdb_memtable_mem_usage += row.rdb_memtable_mem_usage;
-        rdb_estimate_num_keys += row.rdb_estimate_num_keys;
-        backup_request_qps += row.backup_request_qps;
-        get_bytes += row.get_bytes;
-        multi_get_bytes += row.multi_get_bytes;
-        scan_bytes += row.scan_bytes;
-        put_bytes += row.put_bytes;
-        multi_put_bytes += row.multi_put_bytes;
-        check_and_set_bytes += row.check_and_set_bytes;
-        check_and_mutate_bytes += row.check_and_mutate_bytes;
+        const std::vector<std::string>& base_metric_names = get_base_metric_names();
+        for (const auto &name : base_metric_names) {
+            counter_name_value_map[name] += row.counter_name_value_map[name];
+        }
     }
 
     std::string row_name;
     int32_t app_id = 0;
     int32_t partition_count = 0;
+    std::map<std::string, double> counter_name_value_map;
+
     double get_qps = 0;
     double multi_get_qps = 0;
     double put_qps = 0;
@@ -651,89 +652,11 @@ struct row_data
 inline bool
 update_app_pegasus_perf_counter(row_data &row, const std::string &counter_name, double value)
 {
-    if (counter_name == "get_qps")
-        row.get_qps += value;
-    else if (counter_name == "multi_get_qps")
-        row.multi_get_qps += value;
-    else if (counter_name == "put_qps")
-        row.put_qps += value;
-    else if (counter_name == "multi_put_qps")
-        row.multi_put_qps += value;
-    else if (counter_name == "remove_qps")
-        row.remove_qps += value;
-    else if (counter_name == "multi_remove_qps")
-        row.multi_remove_qps += value;
-    else if (counter_name == "incr_qps")
-        row.incr_qps += value;
-    else if (counter_name == "check_and_set_qps")
-        row.check_and_set_qps += value;
-    else if (counter_name == "check_and_mutate_qps")
-        row.check_and_mutate_qps += value;
-    else if (counter_name == "scan_qps")
-        row.scan_qps += value;
-    else if (counter_name == "duplicate_qps")
-        row.duplicate_qps += value;
-    else if (counter_name == "dup_shipped_ops")
-        row.dup_shipped_ops += value;
-    else if (counter_name == "dup_failed_shipping_ops")
-        row.dup_failed_shipping_ops += value;
-    else if (counter_name == "recent.read.cu")
-        row.recent_read_cu += value;
-    else if (counter_name == "recent.write.cu")
-        row.recent_write_cu += value;
-    else if (counter_name == "recent.expire.count")
-        row.recent_expire_count += value;
-    else if (counter_name == "recent.filter.count")
-        row.recent_filter_count += value;
-    else if (counter_name == "recent.abnormal.count")
-        row.recent_abnormal_count += value;
-    else if (counter_name == "recent.write.throttling.delay.count")
-        row.recent_write_throttling_delay_count += value;
-    else if (counter_name == "recent.write.throttling.reject.count")
-        row.recent_write_throttling_reject_count += value;
-    else if (counter_name == "disk.storage.sst(MB)")
-        row.storage_mb += value;
-    else if (counter_name == "disk.storage.sst.count")
-        row.storage_count += value;
-    else if (counter_name == "rdb.block_cache.hit_count")
-        row.rdb_block_cache_hit_count += value;
-    else if (counter_name == "rdb.block_cache.total_count")
-        row.rdb_block_cache_total_count += value;
-    else if (counter_name == "rdb.index_and_filter_blocks.memory_usage")
-        row.rdb_index_and_filter_blocks_mem_usage += value;
-    else if (counter_name == "rdb.memtable.memory_usage")
-        row.rdb_memtable_mem_usage += value;
-    else if (counter_name == "rdb.estimate_num_keys")
-        row.rdb_estimate_num_keys += value;
-    else if (counter_name == "rdb.bf_seek_negatives")
-        row.rdb_bf_seek_negatives += value;
-    else if (counter_name == "rdb.bf_seek_total")
-        row.rdb_bf_seek_total += value;
-    else if (counter_name == "rdb.bf_point_positive_true")
-        row.rdb_bf_point_positive_true += value;
-    else if (counter_name == "rdb.bf_point_positive_total")
-        row.rdb_bf_point_positive_total += value;
-    else if (counter_name == "rdb.bf_point_negatives")
-        row.rdb_bf_point_negatives += value;
-    else if (counter_name == "backup_request_qps")
-        row.backup_request_qps += value;
-    else if (counter_name == "get_bytes")
-        row.get_bytes += value;
-    else if (counter_name == "multi_get_bytes")
-        row.multi_get_bytes += value;
-    else if (counter_name == "scan_bytes")
-        row.scan_bytes += value;
-    else if (counter_name == "put_bytes")
-        row.put_bytes += value;
-    else if (counter_name == "multi_put_bytes")
-        row.multi_put_bytes += value;
-    else if (counter_name == "check_and_set_bytes")
-        row.check_and_set_bytes += value;
-    else if (counter_name == "check_and_mutate_bytes")
-        row.check_and_mutate_bytes += value;
-    else
-        return false;
-    return true;
+    if (row.counter_name_value_map.find(counter_name) != row.counter_name_value_map.end()) {
+        row.counter_name_value_map[counter_name] += value;
+        return true;
+    }
+    return false;
 }
 
 inline bool get_apps_and_nodes(shell_context *sc,
@@ -851,7 +774,8 @@ inline bool get_app_partition_stat(shell_context *sc,
                     row_data &row = rows[app_id_name[app_id_x]][partition_index_x];
                     row.row_name = std::to_string(partition_index_x);
                     row.app_id = app_id_x;
-                    update_app_pegasus_perf_counter(row, counter_name, m.value);
+                    row.counter_name_value_map[counter_name] += m.value;
+                    //update_app_pegasus_perf_counter(row, counter_name, m.value);
                 }
             } else if (parse_app_perf_counter_name(m.name, app_name, counter_name)) {
                 // if the app_name from perf-counter isn't existed(maybe the app was dropped), it
@@ -862,7 +786,8 @@ inline bool get_app_partition_stat(shell_context *sc,
                 // perf-counter value will be set into partition index 0.
                 row_data &row = rows[app_name][0];
                 row.app_id = app_name_id[app_name];
-                update_app_pegasus_perf_counter(row, counter_name, m.value);
+                row.counter_name_value_map[counter_name] += m.value;
+                //update_app_pegasus_perf_counter(row, counter_name, m.value);
             }
         }
     }

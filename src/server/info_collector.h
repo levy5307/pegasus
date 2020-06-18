@@ -105,6 +105,8 @@ public:
             write_bytes->set(row_stats.get_total_write_bytes());
         }
 
+        std::map<std::string, dsn::perf_counter_wrapper> perf_counter_map;
+
         ::dsn::perf_counter_wrapper get_qps;
         ::dsn::perf_counter_wrapper multi_get_qps;
         ::dsn::perf_counter_wrapper put_qps;
@@ -156,7 +158,7 @@ public:
     void stop();
 
     void on_app_stat();
-    app_stat_counters *get_app_counters(const std::string &app_name);
+    app_stat_counters *get_app_counters(const row_data &row);
 
     void on_capacity_unit_stat(int remaining_retry_count);
     bool has_capacity_unit_updated(const std::string &node_address, const std::string &timestamp);

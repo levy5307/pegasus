@@ -146,7 +146,7 @@ void info_collector::on_app_stat()
         for (auto partition_row : app_rows.second) {
             app_stats.aggregate(partition_row);
         }
-        get_app_counters(app_stats.row_name)->set(app_stats);
+        get_app_counters(app_stats)->set(app_stats.calculate_composite_metrics());
 
         // get row data statistics for all of the apps
         all_stats.aggregate(app_stats);
@@ -161,7 +161,7 @@ void info_collector::on_app_stat()
         // new policy can be designed by strategy pattern in hotspot_partition_data.h
         hotspot_calculator->start_alg();
     }
-    get_app_counters(all_stats.row_name)->set(all_stats);
+    get_app_counters(all_stats)->set(all_stats.calculate_composite_metrics());
 
     ddebug("stat apps succeed, app_count = %d, total_read_qps = %.2f, total_write_qps = %.2f",
            (int)(all_rows.size() - 1),
@@ -169,66 +169,24 @@ void info_collector::on_app_stat()
            all_stats.get_total_write_qps());
 }
 
-info_collector::app_stat_counters *info_collector::get_app_counters(const std::string &app_name)
+info_collector::app_stat_counters *info_collector::get_app_counters(const row_data &row)
 {
     ::dsn::utils::auto_lock<::dsn::utils::ex_lock_nr> l(_app_stat_counter_lock);
-    auto find = _app_stat_counters.find(app_name);
+    auto find = _app_stat_counters.find(row.row_name);
     if (find != _app_stat_counters.end()) {
         return find->second;
     }
-    app_stat_counters *counters = new app_stat_counters();
 
+    app_stat_counters *counters = new app_stat_counters();
+    const std::string &app_name = row.row_name;
     char counter_name[1024];
     char counter_desc[1024];
-#define INIT_COUNTER(name)                                                                         \
-    do {                                                                                           \
-        sprintf(counter_name, "app.stat." #name "#%s", app_name.c_str());                          \
-        sprintf(counter_desc, "statistic the " #name " of app %s", app_name.c_str());              \
-        counters->name.init_app_counter(                                                           \
-            "app.pegasus", counter_name, COUNTER_TYPE_NUMBER, counter_desc);                       \
-    } while (0)
-
-    INIT_COUNTER(get_qps);
-    INIT_COUNTER(multi_get_qps);
-    INIT_COUNTER(put_qps);
-    INIT_COUNTER(multi_put_qps);
-    INIT_COUNTER(remove_qps);
-    INIT_COUNTER(multi_remove_qps);
-    INIT_COUNTER(incr_qps);
-    INIT_COUNTER(check_and_set_qps);
-    INIT_COUNTER(check_and_mutate_qps);
-    INIT_COUNTER(scan_qps);
-    INIT_COUNTER(duplicate_qps);
-    INIT_COUNTER(dup_shipped_ops);
-    INIT_COUNTER(dup_failed_shipping_ops);
-    INIT_COUNTER(recent_read_cu);
-    INIT_COUNTER(recent_write_cu);
-    INIT_COUNTER(recent_expire_count);
-    INIT_COUNTER(recent_filter_count);
-    INIT_COUNTER(recent_abnormal_count);
-    INIT_COUNTER(recent_write_throttling_delay_count);
-    INIT_COUNTER(recent_write_throttling_reject_count);
-    INIT_COUNTER(storage_mb);
-    INIT_COUNTER(storage_count);
-    INIT_COUNTER(rdb_block_cache_hit_rate);
-    INIT_COUNTER(rdb_index_and_filter_blocks_mem_usage);
-    INIT_COUNTER(rdb_memtable_mem_usage);
-    INIT_COUNTER(rdb_estimate_num_keys);
-    INIT_COUNTER(rdb_bf_seek_negatives_rate);
-    INIT_COUNTER(rdb_bf_point_negatives_rate);
-    INIT_COUNTER(rdb_bf_point_false_positive_rate);
-    INIT_COUNTER(read_qps);
-    INIT_COUNTER(write_qps);
-    INIT_COUNTER(backup_request_qps);
-    INIT_COUNTER(get_bytes);
-    INIT_COUNTER(multi_get_bytes);
-    INIT_COUNTER(scan_bytes);
-    INIT_COUNTER(put_bytes);
-    INIT_COUNTER(multi_put_bytes);
-    INIT_COUNTER(check_and_set_bytes);
-    INIT_COUNTER(check_and_mutate_bytes);
-    INIT_COUNTER(read_bytes);
-    INIT_COUNTER(write_bytes);
+    const std::map<std::string, double> &all_metrics = row.get_all_metrics();
+    for (const auto &name_value_pair : all_metrics) {
+        sprintf(counter_name, "app.stat.%s#%s", name_value_pair.first.c_str(), app_name.c_str());                          \
+        sprintf(counter_desc, "statistic the %s of app %s", name_value_pair.first.c_str(), app_name.c_str());              \
+        counters->perf_counter_map[name_value_pair.first].init_app_counter("app.pegasus", counter_name, COUNTER_TYPE_NUMBER, counter_desc);
+    }
     _app_stat_counters[app_name] = counters;
     return counters;
 }
