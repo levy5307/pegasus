@@ -179,19 +179,14 @@ info_collector::app_stat_counters *info_collector::get_app_counters(const row_da
 
     app_stat_counters *counters = new app_stat_counters();
     const std::string &app_name = row.row_name;
-    char counter_name[1024];
-    char counter_desc[1024];
-#define INIT_COUNTER(name)                                                                         \
-    do {                                                                                           \
-        sprintf(counter_name, "app.stat." #name "#%s", app_name.c_str());                          \
-        sprintf(counter_desc, "statistic the " #name " of app %s", app_name.c_str());              \
-        counters->perf_counter_map[name].init_app_counter(                                         \
-                                "app.pegasus", counter_name, COUNTER_TYPE_NUMBER, counter_desc); \
-    } while (0)
-
-    const std::map<std::string, double> &all_metrics = row.get_all_metrics();
-    for (const auto &kv : all_metrics) {
-        INIT_COUNTER(kv.first);
+    std::string counter_name;
+    std::string counter_desc;
+    const std::map<std::string, double> &base_metrics = row.get_all_metrics();
+    for (const auto &kv : base_metrics) {
+        counter_name = fmt::format("app.stat.{}#{}", kv.first, app_name);
+        counter_desc = fmt::format("statistic the {} of app {}", kv.first, app_name);
+        counters->perf_counter_map[kv.first].init_app_counter(
+            "app.pegasus", counter_name.c_str(), COUNTER_TYPE_NUMBER, counter_desc.c_str());
     }
 
     _app_stat_counters[app_name] = counters;

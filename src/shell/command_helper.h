@@ -541,25 +541,19 @@ inline bool parse_app_perf_counter_name(const std::string &name,
 
 struct row_data
 {
-    explicit row_data(const std::string &name) : row_name(name) {
-        row_data();
-    }
+    explicit row_data(const std::string &name) : row_name(name) { row_data(); }
 
-    row_data() {
-        const std::vector<std::string>& base_metric_names = get_base_metric_names();
+    row_data()
+    {
+        const std::vector<std::string> &base_metric_names = get_base_metric_names();
         for (const auto &name : base_metric_names) {
-            metrics[name] = 0;
-        }
-
-        const std::vector<std::string>& composite_metric_names = get_base_metric_names();
-        for (const auto &name : composite_metric_names) {
             metrics[name] = 0;
         }
     }
 
     void aggregate(const row_data &row)
     {
-        const std::vector<std::string>& base_metric_names = get_base_metric_names();
+        const std::vector<std::string> &base_metric_names = get_base_metric_names();
         for (const auto &metric_name : base_metric_names) {
             metrics[metric_name] += row.metrics.at(metric_name);
         }
@@ -567,19 +561,18 @@ struct row_data
         calculate_composite_metrics();
     }
 
-    void calculate_composite_metrics() {
+    void calculate_composite_metrics()
+    {
         /// add some caculated results
         /// (for example: total read qps / total write qps) into it
-        const std::vector<std::string> &composite_metric_names = get_composite_metric_names();
+        const std::vector<std::string> composite_metric_names{"total_get_qps"};
         for (const auto &name : composite_metric_names) {
             /// todo: real calculate
             metrics[name] = 0;
         }
     }
 
-    const std::map<std::string, double>& get_all_metrics() const {
-        return metrics;
-    }
+    const std::map<std::string, double> &get_all_metrics() const { return metrics; }
 
     bool update_metric(const std::string &counter_name, double value)
     {
