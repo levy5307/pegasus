@@ -35,6 +35,7 @@
 
 #include "command_executor.h"
 #include "command_utils.h"
+#include "stat_metrics.h"
 
 using namespace dsn::replication;
 
@@ -544,30 +545,49 @@ struct row_data
         row_data();
     }
 
-    static const std::vector<std::string>& get_base_metric_names() {
-        static std::vector<std::string> base_metric_names{"get_qps"};
-        return base_metric_names;
-    }
-
     row_data() {
-        /// todo: add more counter_names,
         const std::vector<std::string>& base_metric_names = get_base_metric_names();
-        for (auto name : base_metric_names) {
-            counter_name_value_map[name] = 0;
+        for (const auto &name : base_metric_names) {
+            metrics[name] = 0;
+        }
+
+        const std::vector<std::string>& composite_metric_names = get_base_metric_names();
+        for (const auto &name : composite_metric_names) {
+            metrics[name] = 0;
         }
     }
 
-    const row_data& calculate_composite_metrics() {
-        /// and some caculated results
-        /// (for example: total read qps / total write qps) into it
-        static std::vector<std::string> complex_metric_names{"total_read_qps"};
+    void aggregate(const row_data &row)
+    {
+        const std::vector<std::string>& base_metric_names = get_base_metric_names();
+        for (const auto &metric_name : base_metric_names) {
+            metrics[metric_name] += row.metrics.at(metric_name);
+        }
 
-        /// todo
-        return *this;
+        calculate_composite_metrics();
+    }
+
+    void calculate_composite_metrics() {
+        /// add some caculated results
+        /// (for example: total read qps / total write qps) into it
+        const std::vector<std::string> &composite_metric_names = get_composite_metric_names();
+        for (const auto &name : composite_metric_names) {
+            /// todo: real calculate
+            metrics[name] = 0;
+        }
     }
 
     const std::map<std::string, double>& get_all_metrics() const {
-        return counter_name_value_map;
+        return metrics;
+    }
+
+    bool update_metric(const std::string &counter_name, double value)
+    {
+        if (metrics.find(counter_name) != metrics.end()) {
+            metrics[counter_name] += value;
+            return true;
+        }
+        return false;
     }
 
     double get_total_read_qps() const { return get_qps + multi_get_qps + scan_qps; }
@@ -594,19 +614,11 @@ struct row_data
 
     double get_total_cu() const { return recent_read_cu + recent_write_cu; }
 
-    void aggregate(const row_data &row)
-    {
-        const std::vector<std::string>& base_metric_names = get_base_metric_names();
-        for (const auto &name : base_metric_names) {
-            counter_name_value_map[name] += row.counter_name_value_map[name];
-        }
-    }
-
     std::string row_name;
     int32_t app_id = 0;
     int32_t partition_count = 0;
-    std::map<std::string, double> counter_name_value_map;
 
+    /// todo: delete
     double get_qps = 0;
     double multi_get_qps = 0;
     double put_qps = 0;
@@ -647,17 +659,10 @@ struct row_data
     double multi_put_bytes = 0;
     double check_and_set_bytes = 0;
     double check_and_mutate_bytes = 0;
-};
 
-inline bool
-update_app_pegasus_perf_counter(row_data &row, const std::string &counter_name, double value)
-{
-    if (row.counter_name_value_map.find(counter_name) != row.counter_name_value_map.end()) {
-        row.counter_name_value_map[counter_name] += value;
-        return true;
-    }
-    return false;
-}
+private:
+    std::map<std::string, double> metrics;
+};
 
 inline bool get_apps_and_nodes(shell_context *sc,
                                std::vector<::dsn::app_info> &apps,
@@ -774,8 +779,8 @@ inline bool get_app_partition_stat(shell_context *sc,
                     row_data &row = rows[app_id_name[app_id_x]][partition_index_x];
                     row.row_name = std::to_string(partition_index_x);
                     row.app_id = app_id_x;
-                    row.counter_name_value_map[counter_name] += m.value;
-                    //update_app_pegasus_perf_counter(row, counter_name, m.value);
+                    row.metrics[counter_name] += m.value;
+                    row.update_metric(counter_name, m.value);
                 }
             } else if (parse_app_perf_counter_name(m.name, app_name, counter_name)) {
                 // if the app_name from perf-counter isn't existed(maybe the app was dropped), it
@@ -786,8 +791,8 @@ inline bool get_app_partition_stat(shell_context *sc,
                 // perf-counter value will be set into partition index 0.
                 row_data &row = rows[app_name][0];
                 row.app_id = app_name_id[app_name];
-                row.counter_name_value_map[counter_name] += m.value;
-                //update_app_pegasus_perf_counter(row, counter_name, m.value);
+                row.metrics[counter_name] += m.value;
+                row.update_metric(counter_name, m.value);
             }
         }
     }
@@ -861,7 +866,7 @@ get_app_stat(shell_context *sc, const std::string &app_name, std::vector<row_dat
                 dsn::partition_configuration &pc = find->second[partition_index_x];
                 if (pc.primary != node_addr)
                     continue;
-                update_app_pegasus_perf_counter(rows[app_row_idx[app_id_x]], counter_name, m.value);
+                rows[app_row_idx[app_id_x]].update_metric(counter_name, m.value);
             }
         }
     } else {
@@ -898,7 +903,7 @@ get_app_stat(shell_context *sc, const std::string &app_name, std::vector<row_dat
                 dassert(partition_index_x < partition_count, "name = %s", m.name.c_str());
                 if (partitions[partition_index_x].primary != node_addr)
                     continue;
-                update_app_pegasus_perf_counter(rows[partition_index_x], counter_name, m.value);
+                rows[partition_index_x].update_metric(counter_name, m.value);
             }
         }
     }

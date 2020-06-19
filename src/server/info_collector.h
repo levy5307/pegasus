@@ -37,6 +37,12 @@ public:
 
         void set(const row_data &row_stats)
         {
+            const std::map<std::string, double>& all_metrics = row_stats.get_all_metrics();
+            for (const auto &kv : all_metrics) {
+                perf_counter_map[kv.first]->set(kv.second);
+            }
+
+            /// todo: delete
             get_qps->set(row_stats.get_qps);
             multi_get_qps->set(row_stats.multi_get_qps);
             put_qps->set(row_stats.put_qps);
@@ -107,6 +113,7 @@ public:
 
         std::map<std::string, dsn::perf_counter_wrapper> perf_counter_map;
 
+        /// todo: delete
         ::dsn::perf_counter_wrapper get_qps;
         ::dsn::perf_counter_wrapper multi_get_qps;
         ::dsn::perf_counter_wrapper put_qps;

@@ -146,7 +146,7 @@ void info_collector::on_app_stat()
         for (auto partition_row : app_rows.second) {
             app_stats.aggregate(partition_row);
         }
-        get_app_counters(app_stats)->set(app_stats.calculate_composite_metrics());
+        get_app_counters(app_stats)->set(app_stats);
 
         // get row data statistics for all of the apps
         all_stats.aggregate(app_stats);
@@ -161,7 +161,7 @@ void info_collector::on_app_stat()
         // new policy can be designed by strategy pattern in hotspot_partition_data.h
         hotspot_calculator->start_alg();
     }
-    get_app_counters(all_stats)->set(all_stats.calculate_composite_metrics());
+    get_app_counters(all_stats)->set(all_stats);
 
     ddebug("stat apps succeed, app_count = %d, total_read_qps = %.2f, total_write_qps = %.2f",
            (int)(all_rows.size() - 1),
@@ -181,12 +181,19 @@ info_collector::app_stat_counters *info_collector::get_app_counters(const row_da
     const std::string &app_name = row.row_name;
     char counter_name[1024];
     char counter_desc[1024];
+#define INIT_COUNTER(name)                                                                         \
+    do {                                                                                           \
+        sprintf(counter_name, "app.stat." #name "#%s", app_name.c_str());                          \
+        sprintf(counter_desc, "statistic the " #name " of app %s", app_name.c_str());              \
+        counters->perf_counter_map[name].init_app_counter(                                         \
+                                "app.pegasus", counter_name, COUNTER_TYPE_NUMBER, counter_desc); \
+    } while (0)
+
     const std::map<std::string, double> &all_metrics = row.get_all_metrics();
-    for (const auto &name_value_pair : all_metrics) {
-        sprintf(counter_name, "app.stat.%s#%s", name_value_pair.first.c_str(), app_name.c_str());                          \
-        sprintf(counter_desc, "statistic the %s of app %s", name_value_pair.first.c_str(), app_name.c_str());              \
-        counters->perf_counter_map[name_value_pair.first].init_app_counter("app.pegasus", counter_name, COUNTER_TYPE_NUMBER, counter_desc);
+    for (const auto &kv : all_metrics) {
+        INIT_COUNTER(kv.first);
     }
+
     _app_stat_counters[app_name] = counters;
     return counters;
 }
