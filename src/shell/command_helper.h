@@ -28,6 +28,7 @@
 #include <pegasus/git_commit.h>
 #include <pegasus/error.h>
 #include <geo/lib/geo_client.h>
+#include <include/pegasus/perf_counter_names.h>
 
 #include "base/pegasus_key_schema.h"
 #include "base/pegasus_value_schema.h"
@@ -541,24 +542,27 @@ inline bool parse_app_perf_counter_name(const std::string &name,
 
 struct row_data
 {
-    explicit row_data(const std::string &name) : row_name(name) { row_data(); }
+    row_data(const std::vector<std::string> &stat_metric_names) { init(stat_metric_names); }
 
-    row_data()
+    row_data(const std::string &name, const std::vector<std::string> &stat_metric_names)
+        : row_name(name)
     {
-        const std::vector<std::string> &base_metric_names = get_base_metric_names();
-        for (const auto &name : base_metric_names) {
-            metrics[name] = 0;
+        init(stat_metric_names);
+    }
+
+    void init(const std::vector<std::string> &stat_metric_names)
+    {
+        for (const auto &name : stat_metric_names) {
+            this->metrics[name] = 0;
         }
     }
 
     void aggregate(const row_data &row)
     {
-        const std::vector<std::string> &base_metric_names = get_base_metric_names();
-        for (const auto &metric_name : base_metric_names) {
-            metrics[metric_name] += row.metrics.at(metric_name);
+        this->partition_count += row.partition_count;
+        for (auto &kv : row.metrics) {
+            this->metrics[kv.first] += kv.second;
         }
-
-        calculate_composite_metrics();
     }
 
     void calculate_composite_metrics()
@@ -722,7 +726,8 @@ inline bool decode_node_perf_counter_info(const dsn::rpc_address &node_addr,
 
 // rows: key-app name, value-perf counters for each partition
 inline bool get_app_partition_stat(shell_context *sc,
-                                   std::map<std::string, std::vector<row_data>> &rows)
+                                   std::map<std::string, std::vector<row_data>> &rows,
+                                   const std::vector<std::string> stat_metric_names)
 {
     // get apps and nodes
     std::vector<::dsn::app_info> apps;
@@ -737,7 +742,7 @@ inline bool get_app_partition_stat(shell_context *sc,
     for (::dsn::app_info &app : apps) {
         app_id_name[app.app_id] = app.app_name;
         app_name_id[app.app_name] = app.app_id;
-        rows[app.app_name].resize(app.partition_count);
+        rows[app.app_name].resize(app.partition_count, row_data(stat_metric_names));
     }
 
     // get app_id --> partitions
@@ -772,7 +777,6 @@ inline bool get_app_partition_stat(shell_context *sc,
                     row_data &row = rows[app_id_name[app_id_x]][partition_index_x];
                     row.row_name = std::to_string(partition_index_x);
                     row.app_id = app_id_x;
-                    row.metrics[counter_name] += m.value;
                     row.update_metric(counter_name, m.value);
                 }
             } else if (parse_app_perf_counter_name(m.name, app_name, counter_name)) {
@@ -784,7 +788,6 @@ inline bool get_app_partition_stat(shell_context *sc,
                 // perf-counter value will be set into partition index 0.
                 row_data &row = rows[app_name][0];
                 row.app_id = app_name_id[app_name];
-                row.metrics[counter_name] += m.value;
                 row.update_metric(counter_name, m.value);
             }
         }

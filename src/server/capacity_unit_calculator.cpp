@@ -5,6 +5,8 @@
 #include "capacity_unit_calculator.h"
 #include <dsn/utility/config_api.h>
 #include <rocksdb/status.h>
+#include <include/pegasus/perf_counter_names.h>
+#include <fmt/format.h>
 
 namespace pegasus {
 namespace server {
@@ -29,45 +31,44 @@ capacity_unit_calculator::capacity_unit_calculator(replica_base *r) : replica_ba
     _log_write_cu_size = log(_write_capacity_unit_size) / log(2);
 
     std::string str_gpid = r->get_gpid().to_string();
-    char name[256];
-    snprintf(name, 255, "recent.read.cu@%s", str_gpid.c_str());
+    std::string name = fmt::format("{}@{}", perf_counter_names::RECENT_READ_CU, str_gpid);
     _pfc_recent_read_cu.init_app_counter("app.pegasus",
-                                         name,
+                                         name.c_str(),
                                          COUNTER_TYPE_VOLATILE_NUMBER,
                                          "statistic the recent read capacity units");
-    snprintf(name, 255, "recent.write.cu@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::RECENT_WRITE_CU, str_gpid);
     _pfc_recent_write_cu.init_app_counter("app.pegasus",
-                                          name,
+                                          name.c_str(),
                                           COUNTER_TYPE_VOLATILE_NUMBER,
                                           "statistic the recent write capacity units");
 
-    snprintf(name, 255, "get_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::GET_BYTES, str_gpid);
     _pfc_get_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the get bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the get bytes");
 
-    snprintf(name, 255, "multi_get_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::MULTI_GET_BYTES, str_gpid);
     _pfc_multi_get_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the multi get bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the multi get bytes");
 
-    snprintf(name, 255, "scan_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::SCAN_BYTES, str_gpid);
     _pfc_scan_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the scan bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the scan bytes");
 
-    snprintf(name, 255, "put_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::PUT_BYTES, str_gpid);
     _pfc_put_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the put bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the put bytes");
 
-    snprintf(name, 255, "multi_put_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::MULTI_PUT_BYTES, str_gpid);
     _pfc_multi_put_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the multi put bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the multi put bytes");
 
-    snprintf(name, 255, "check_and_set_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::CHECK_AND_SET_BYTES, str_gpid);
     _pfc_check_and_set_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the check and set bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the check and set bytes");
 
-    snprintf(name, 255, "check_and_mutate_bytes@%s", str_gpid.c_str());
+    name = fmt::format("{}@{}", perf_counter_names::CHECK_AND_MUTATE_BYTES, str_gpid);
     _pfc_check_and_mutate_bytes.init_app_counter(
-        "app.pegasus", name, COUNTER_TYPE_RATE, "statistic the check and mutate bytes");
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the check and mutate bytes");
 }
 
 int64_t capacity_unit_calculator::add_read_cu(int64_t read_data_size)

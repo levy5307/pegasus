@@ -10,6 +10,7 @@
 #include <dsn/utility/chrono_literals.h>
 #include <dsn/dist/replication/duplication_common.h>
 #include <rrdb/rrdb.client.h>
+#include <include/pegasus/perf_counter_names.h>
 
 namespace dsn {
 namespace replication {
@@ -86,13 +87,14 @@ pegasus_mutation_duplicator::pegasus_mutation_duplicator(dsn::replication::repli
                     _remote_cluster_id);
 
     std::string str_gpid = fmt::format("{}", get_gpid());
-    _shipped_ops.init_app_counter("app.pegasus",
-                                  fmt::format("dup_shipped_ops@{}", str_gpid).c_str(),
-                                  COUNTER_TYPE_RATE,
-                                  "the total ops of DUPLICATE requests sent from this app");
+    _shipped_ops.init_app_counter(
+        "app.pegasus",
+        fmt::format("{}@{}", perf_counter_names::DUP_SHIPPED_OPS, str_gpid).c_str(),
+        COUNTER_TYPE_RATE,
+        "the total ops of DUPLICATE requests sent from this app");
     _failed_shipping_ops.init_app_counter(
         "app.pegasus",
-        fmt::format("dup_failed_shipping_ops@{}", str_gpid).c_str(),
+        fmt::format("{}@{}", perf_counter_names::DUP_FAILED_SHIPPING_OPS, str_gpid).c_str(),
         COUNTER_TYPE_RATE,
         "the qps of failed DUPLICATE requests sent from this app");
 }

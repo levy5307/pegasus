@@ -6,7 +6,7 @@
 
 #include <dsn/utility/flags.h>
 #include <rocksdb/filter_policy.h>
-#include <include/pegasus/metric_names.h>
+#include <include/pegasus/perf_counter_names.h>
 
 #include "capacity_unit_calculator.h"
 #include "hashkey_transform.h"
@@ -364,15 +364,15 @@ pegasus_server_impl::pegasus_server_impl(dsn::replication::replica *r)
     std::string name;
 
     // register the perf counters
-    name = fmt::format("{}@{}", metric_names::get_qps, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::GET_QPS, str_gpid);
     _pfc_get_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of GET request");
 
-    name = fmt::format("{}@{}", metric_names::multi_get_qps, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::MULTI_GET_QPS, str_gpid);
     _pfc_multi_get_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of MULTI_GET request");
 
-    name = fmt::format("{}@{}", metric_names::scan_qps, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::SCAN_QPS, str_gpid);
     _pfc_scan_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of SCAN request");
 
@@ -394,40 +394,40 @@ pegasus_server_impl::pegasus_server_impl(dsn::replication::replica *r)
                                        COUNTER_TYPE_NUMBER_PERCENTILES,
                                        "statistic the latency of SCAN request");
 
-    name = fmt::format("{}@{}", metric_names::recent_expire_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RECENT_EXPIRE_COUNT, str_gpid);
     _pfc_recent_expire_count.init_app_counter("app.pegasus",
                                               name.c_str(),
                                               COUNTER_TYPE_VOLATILE_NUMBER,
                                               "statistic the recent expired value read count");
 
-    name = fmt::format("{}@{}", metric_names::recent_filter_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RECENT_FILTER_COUNT, str_gpid);
     _pfc_recent_filter_count.init_app_counter("app.pegasus",
                                               name.c_str(),
                                               COUNTER_TYPE_VOLATILE_NUMBER,
                                               "statistic the recent filtered value read count");
 
-    name = fmt::format("{}@{}", metric_names::recent_abnormal_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RECENT_ABNORMAL_COUNT, str_gpid);
     _pfc_recent_abnormal_count.init_app_counter("app.pegasus",
                                                 name.c_str(),
                                                 COUNTER_TYPE_VOLATILE_NUMBER,
                                                 "statistic the recent abnormal read count");
 
-    name = fmt::format("{}@{}", metric_names::storage_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::STORAGE_COUNT, str_gpid);
     _pfc_rdb_sst_count.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_NUMBER, "statistic the count of sstable files");
 
-    name = fmt::format("{}@{}", metric_names::storage_mb, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::STORAGE_MB, str_gpid);
     _pfc_rdb_sst_size.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_NUMBER, "statistic the size of sstable files");
 
-    name = fmt::format("{}@{}", metric_names::rdb_block_cache_hit_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BLOCK_CACHE_HIT_COUNT, str_gpid);
     _pfc_rdb_block_cache_hit_count.init_app_counter(
         "app.pegasus",
         name.c_str(),
         COUNTER_TYPE_NUMBER,
         "statistic the hit count of rocksdb block cache");
 
-    name = fmt::format("{}@{}", metric_names::rdb_block_cache_total_count, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BLOCK_CACHE_TOTAL_COUNT, str_gpid);
     _pfc_rdb_block_cache_total_count.init_app_counter(
         "app.pegasus",
         name.c_str(),
@@ -453,27 +453,28 @@ pegasus_server_impl::pegasus_server_impl(dsn::replication::replica *r)
             "statistic the through bytes of rocksdb write rate limiter");
     });
 
-    name = fmt::format("{}@{}", metric_names::rdb_index_and_filter_blocks_mem_usage, str_gpid);
+    name =
+        fmt::format("{}@{}", perf_counter_names::RDB_INDEX_AND_FILTER_BLOCKS_MEM_USAGE, str_gpid);
     _pfc_rdb_index_and_filter_blocks_mem_usage.init_app_counter(
         "app.pegasus",
         name.c_str(),
         COUNTER_TYPE_NUMBER,
         "statistic the memory usage of rocksdb index and filter blocks");
 
-    name = fmt::format("{}@{}", metric_names::rdb_memtable_mem_usage, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_MEMTABLE_MEM_USAGE, str_gpid);
     _pfc_rdb_memtable_mem_usage.init_app_counter("app.pegasus",
                                                  name.c_str(),
                                                  COUNTER_TYPE_NUMBER,
                                                  "statistic the memory usage of rocksdb memtable");
 
-    name = fmt::format("{}@{}", metric_names::rdb_estimate_num_keys, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_ESTIMATE_NUM_KEYS, str_gpid);
     _pfc_rdb_estimate_num_keys.init_app_counter(
         "app.pegasus",
         name.c_str(),
         COUNTER_TYPE_NUMBER,
         "statistics the estimated number of keys inside the rocksdb");
 
-    name = fmt::format("{}@{}", metric_names::rdb_bf_seek_negatives, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BF_SEEK_NEGATIVES, str_gpid);
     _pfc_rdb_bf_seek_negatives.init_app_counter("app.pegasus",
                                                 name.c_str(),
                                                 COUNTER_TYPE_NUMBER,
@@ -482,28 +483,28 @@ pegasus_server_impl::pegasus_server_impl(dsn::replication::replica *r)
                                                 "useful in avoiding iterator creation (and thus "
                                                 "likely IOPs)");
 
-    name = fmt::format("{}@{}", metric_names::rdb_bf_seek_total, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BF_SEEK_TOTAL, str_gpid);
     _pfc_rdb_bf_seek_total.init_app_counter("app.pegasus",
                                             name.c_str(),
                                             COUNTER_TYPE_NUMBER,
                                             "statistics the number of times bloom filter was "
                                             "checked before creating iterator on a file");
 
-    name = fmt::format("{}@{}", metric_names::rdb_bf_point_positive_true, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BF_POINT_POSITIVE_TRUE, str_gpid);
     _pfc_rdb_bf_point_positive_true.init_app_counter(
         "app.pegasus",
         name.c_str(),
         COUNTER_TYPE_NUMBER,
         "statistics the number of times bloom filter has avoided file reads, i.e., negatives");
 
-    name = fmt::format("{}@{}", metric_names::rdb_bf_point_positive_total, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BF_POINT_POSITIVE_TOTAL, str_gpid);
     _pfc_rdb_bf_point_positive_total.init_app_counter(
         "app.pegasus",
         name.c_str(),
         COUNTER_TYPE_NUMBER,
         "statistics the number of times bloom FullFilter has not avoided the reads");
 
-    name = fmt::format("{}@{}", metric_names::rdb_bf_point_negatives, str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::RDB_BF_POINT_NEGATIVES, str_gpid);
     _pfc_rdb_bf_point_negatives.init_app_counter("app.pegasus",
                                                  name.c_str(),
                                                  COUNTER_TYPE_NUMBER,

@@ -10,6 +10,7 @@
 #include <dsn/cpp/message_utils.h>
 #include <dsn/dist/replication/replication.codes.h>
 #include <dsn/utility/defer.h>
+#include <include/pegasus/perf_counter_names.h>
 
 namespace pegasus {
 namespace server {
@@ -27,35 +28,35 @@ pegasus_write_service::pegasus_write_service(pegasus_server_impl *server)
 
     std::string name;
 
-    name = fmt::format("put_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::PUT_QPS, str_gpid);
     _pfc_put_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of PUT request");
 
-    name = fmt::format("multi_put_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::MULTI_PUT_QPS, str_gpid);
     _pfc_multi_put_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of MULTI_PUT request");
 
-    name = fmt::format("remove_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::REMOVE_QPS, str_gpid);
     _pfc_remove_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of REMOVE request");
 
-    name = fmt::format("multi_remove_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::MULTI_REMOVE_QPS, str_gpid);
     _pfc_multi_remove_qps.init_app_counter("app.pegasus",
                                            name.c_str(),
                                            COUNTER_TYPE_RATE,
                                            "statistic the qps of MULTI_REMOVE request");
 
-    name = fmt::format("incr_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::INCR_QPS, str_gpid);
     _pfc_incr_qps.init_app_counter(
         "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of INCR request");
 
-    name = fmt::format("check_and_set_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::CHECK_AND_SET_QPS, str_gpid);
     _pfc_check_and_set_qps.init_app_counter("app.pegasus",
                                             name.c_str(),
                                             COUNTER_TYPE_RATE,
                                             "statistic the qps of CHECK_AND_SET request");
 
-    name = fmt::format("check_and_mutate_qps@{}", str_gpid);
+    name = fmt::format("{}@{}", perf_counter_names::CHECK_AND_MUTATE_QPS, str_gpid);
     _pfc_check_and_mutate_qps.init_app_counter("app.pegasus",
                                                name.c_str(),
                                                COUNTER_TYPE_RATE,
@@ -104,10 +105,9 @@ pegasus_write_service::pegasus_write_service(pegasus_server_impl *server)
         COUNTER_TYPE_NUMBER_PERCENTILES,
         "statistic the latency of CHECK_AND_MUTATE request");
 
-    _pfc_duplicate_qps.init_app_counter("app.pegasus",
-                                        fmt::format("duplicate_qps@{}", str_gpid).c_str(),
-                                        COUNTER_TYPE_RATE,
-                                        "statistic the qps of DUPLICATE requests");
+    name = fmt::format("{}@{}", perf_counter_names::DUPLICATE_QPS, str_gpid);
+    _pfc_duplicate_qps.init_app_counter(
+        "app.pegasus", name.c_str(), COUNTER_TYPE_RATE, "statistic the qps of DUPLICATE requests");
 
     _pfc_dup_time_lag.init_app_counter(
         "app.pegasus",

@@ -29,6 +29,50 @@ DEFINE_TASK_CODE(LPC_PEGASUS_STORAGE_SIZE_STAT_TIMER,
                  TASK_PRIORITY_COMMON,
                  ::dsn::THREAD_POOL_DEFAULT)
 
+static const std::vector<std::string>& get_base_metric_names()
+{
+    static const std::vector<std::string> base_metric_names{
+        perf_counter_names::GET_QPS,
+        perf_counter_names::MULTI_GET_QPS,
+        perf_counter_names::PUT_QPS,
+        perf_counter_names::MULTI_PUT_QPS,
+        perf_counter_names::REMOVE_QPS,
+        perf_counter_names::MULTI_REMOVE_QPS,
+        perf_counter_names::INCR_QPS,
+        perf_counter_names::CHECK_AND_SET_QPS,
+        perf_counter_names::CHECK_AND_MUTATE_QPS,
+        perf_counter_names::SCAN_QPS,
+        perf_counter_names::DUPLICATE_QPS,
+        perf_counter_names::DUP_SHIPPED_OPS,
+        perf_counter_names::DUP_FAILED_SHIPPING_OPS,
+        perf_counter_names::RECENT_READ_CU,
+        perf_counter_names::RECENT_WRITE_CU,
+        perf_counter_names::RECENT_EXPIRE_COUNT,
+        perf_counter_names::RECENT_FILTER_COUNT,
+        perf_counter_names::RECENT_ABNORMAL_COUNT,
+        perf_counter_names::RECENT_WRITE_THROTTLING_DELAY_COUNT,
+        perf_counter_names::RECENT_WRITE_THROTTLING_REJECT_COUNT,
+        perf_counter_names::STORAGE_MB,
+        perf_counter_names::STORAGE_COUNT,
+        perf_counter_names::RDB_INDEX_AND_FILTER_BLOCKS_MEM_USAGE,
+        perf_counter_names::RDB_MEMTABLE_MEM_USAGE,
+        perf_counter_names::RDB_ESTIMATE_NUM_KEYS,
+        perf_counter_names::BACKUP_REQUEST_QPS,
+        perf_counter_names::GET_BYTES,
+        perf_counter_names::MULTI_GET_BYTES,
+        perf_counter_names::SCAN_BYTES,
+        perf_counter_names::PUT_BYTES,
+        perf_counter_names::MULTI_PUT_BYTES,
+        perf_counter_names::CHECK_AND_SET_BYTES,
+        perf_counter_names::CHECK_AND_MUTATE_BYTES
+    };
+
+    return base_metric_names;
+}
+
+static void calculate_composite_metric(row_data &row) {
+}
+
 info_collector::info_collector()
 {
     std::vector<::dsn::rpc_address> meta_servers;
@@ -134,15 +178,15 @@ void info_collector::on_app_stat()
 {
     ddebug("start to stat apps");
     std::map<std::string, std::vector<row_data>> all_rows;
-    if (!get_app_partition_stat(&_shell_context, all_rows)) {
+    if (!get_app_partition_stat(&_shell_context, all_rows, get_base_metric_names())) {
         derror("call get_app_stat() failed");
         return;
     }
 
-    row_data all_stats("_all_");
+    row_data all_stats("_all_", get_base_metric_names());
     for (const auto &app_rows : all_rows) {
         // get statistics data for app
-        row_data app_stats(app_rows.first);
+        row_data app_stats(app_rows.first, get_base_metric_names());
         for (auto partition_row : app_rows.second) {
             app_stats.aggregate(partition_row);
         }
