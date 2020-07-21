@@ -68,9 +68,9 @@ size_t c_escape_string(
 template <class T>
 std::string c_escape_string(const T &src, bool always_escape = false)
 {
-    const size_t dest_len = src.length() * 4 + 1; // Maximum possible expansion
+    const size_t dest_len = src.size() * 4 + 1; // Maximum possible expansion
     char *dest = new char[dest_len];
-    const size_t used = c_escape_string(src.data(), src.length(), dest, dest_len, always_escape);
+    const size_t used = c_escape_string(src.data(), src.size(), dest, dest_len, always_escape);
     std::string s(dest, used);
     delete[] dest;
     return s;
@@ -84,6 +84,8 @@ std::string c_escape_string(const T &src, bool always_escape = false)
 //    or (-n) if unescape failed, where n is the failure position.
 // ----------------------------------------------------------------------
 int c_unescape_string(const std::string &src, std::string &dest);
+
+std::string unescape_str(const char *escaped);
 
 inline dsn::string_view to_string_view(rocksdb::Slice s) { return {s.data(), s.size()}; }
 

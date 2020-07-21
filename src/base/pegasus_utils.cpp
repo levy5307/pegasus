@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <dsn/service_api_c.h>
 
 namespace pegasus {
 namespace utils {
@@ -170,6 +171,13 @@ int c_unescape_string(const std::string &src, std::string &dest)
     if (len >= 0 && len < dest.length())
         dest.resize(len);
     return len;
+}
+
+std::string unescape_str(const char *escaped)
+{
+    std::string dst, src = escaped;
+    dassert(pegasus::utils::c_unescape_string(src, dst) >= 0, "");
+    return dst;
 }
 
 } // namespace utils

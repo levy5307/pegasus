@@ -6,7 +6,7 @@ LOCAL_IP=`scripts/get_local_ip`
 export REPORT_DIR="$ROOT/test_report"
 export DSN_ROOT=$ROOT/DSN_ROOT
 export DSN_THIRDPARTY_ROOT=$ROOT/rdsn/thirdparty/output
-export LD_LIBRARY_PATH=$DSN_ROOT/lib:$DSN_THIRDPARTY_ROOT/lib:$BOOST_DIR/lib:$TOOLCHAIN_DIR/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$DSN_ROOT/lib:$DSN_THIRDPARTY_ROOT/lib:$BOOST_DIR/lib:$LD_LIBRARY_PATH
 
 function usage()
 {
@@ -58,9 +58,9 @@ function usage_build()
     echo "   -h|--help             print the help info"
     echo "   -t|--type             build type: debug|release, default is release"
     echo "   -s|--serialize        serialize type: dsn|thrift|proto, default is thrift"
-    echo "   -c|--clear            clear rdsn/rocksdb/pegasus before building, not clear thirdparty"
-    echo "   -cc|--half-clear      clear pegasus before building, not clear thirdparty/rdsn/rocksdb"
-    echo "   --clear_thirdparty    clear thirdparty/rdsn/rocksdb/pegasus before building"
+    echo "   -c|--clear            clear rdsn/pegasus before building, not clear thirdparty"
+    echo "   -cc|--half-clear      clear pegasus before building, not clear thirdparty/rdsn"
+    echo "   --clear_thirdparty    clear thirdparty/rdsn/pegasus before building"
     echo "   --compiler            specify c and cxx compiler, sperated by ','"
     echo "                         e.g., \"gcc,g++\" or \"clang-3.9,clang++-3.9\""
     echo "                         default is \"gcc,g++\""
@@ -71,10 +71,16 @@ function usage_build()
     echo "   -v|--verbose          build in verbose mode, default no"
     echo "   --disable_gperf       build without gperftools, this flag is mainly used"
     echo "                         to enable valgrind memcheck, default no"
+    echo "   --sanitizer <type>    build with sanitizer to check potential problems,
+                                   type: address|leak|thread|undefined"
     echo "   --skip_thirdparty     whether to skip building thirdparties, default no"
 }
 function run_build()
 {
+    # Note(jiashuo1): No "memory" check mode, because MemorySanitizer is only available in Clang for Linux x86_64 targets
+    # # https://www.jetbrains.com/help/clion/google-sanitizers.html
+    SANITIZERS=("address" "leak" "thread" "undefined")
+
     C_COMPILER="gcc"
     CXX_COMPILER="g++"
     BUILD_TYPE="release"
@@ -88,6 +94,7 @@ function run_build()
     RUN_VERBOSE=NO
     DISABLE_GPERF=NO
     SKIP_THIRDPARTY=NO
+    SANITIZER=""
     TEST_MODULE=""
     while [[ $# > 0 ]]; do
         key="$1"
@@ -133,6 +140,16 @@ function run_build()
                 ;;
             --enable_gcov)
                 ENABLE_GCOV=YES
+                ;;
+            --sanitizer)
+                IS_SANITIZERS=`echo ${SANITIZERS[@]} | grep -w $2`
+                if [[ -z ${IS_SANITIZERS} ]]; then
+                    echo "ERROR: unknown sanitizer type \"$2\""
+                    usage_build
+                    exit 1
+                fi
+                SANITIZER="$2"
+                shift
                 ;;
             -v|--verbose)
                 RUN_VERBOSE=YES
@@ -200,89 +217,20 @@ function run_build()
     if [ "$SKIP_THIRDPARTY" == "YES" ]; then
         OPT="$OPT --skip_thirdparty"
     fi
+    if [ ! -z $SANITIZER ]; then
+        OPT="$OPT --sanitizer $SANITIZER"
+    fi
     ./run.sh build $OPT --notest
     if [ $? -ne 0 ]; then
         echo "ERROR: build rdsn failed"
         exit 1
     fi
 
-    echo "INFO: start build rocksdb..."
-    ROCKSDB_BUILD_DIR="$ROOT/rocksdb/build"
-    CMAKE_OPTIONS="-DCMAKE_C_COMPILER=$C_COMPILER -DCMAKE_CXX_COMPILER=$CXX_COMPILER -DWITH_LZ4=ON -DWITH_ZSTD=ON -DWITH_SNAPPY=ON -DWITH_BZ2=OFF"
-    if [ "$WARNING_ALL" == "YES" ]
-    then
-        echo "WARNING_ALL=YES"
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DWARNING_ALL=TRUE"
-    else
-        echo "WARNING_ALL=NO"
-    fi
-    if [ "$ENABLE_GCOV" == "YES" ]
-    then
-        echo "ENABLE_GCOV=YES"
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DENABLE_GCOV=TRUE"
-    else
-        echo "ENABLE_GCOV=NO"
-    fi
-    if [ "$BUILD_TYPE" == "debug" ]
-    then
-        echo "BUILD_TYPE=debug"
-        CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_BUILD_TYPE=Debug"
-    else
-        echo "BUILD_TYPE=release"
-    fi
-
-    if [ -f $ROCKSDB_BUILD_DIR/CMAKE_OPTIONS ]
-    then
-        LAST_OPTIONS=`cat $ROCKSDB_BUILD_DIR/CMAKE_OPTIONS`
-        if [ "$CMAKE_OPTIONS" != "$LAST_OPTIONS" ]
-        then
-            echo "WARNING: CMAKE_OPTIONS has changed from last build, clear environment first"
-            CLEAR=YES
-        fi
-    fi
-
-    if [ "$CLEAR" == "YES" ] && [ -d "$ROCKSDB_BUILD_DIR" ]
-    then
-        echo "Clear $ROCKSDB_BUILD_DIR ..."
-        rm -rf $ROCKSDB_BUILD_DIR
-    fi
-
-    if [ ! -f $ROCKSDB_BUILD_DIR/Makefile ]; then
-        echo "Running cmake..."
-        mkdir -p $ROCKSDB_BUILD_DIR
-        cd $ROCKSDB_BUILD_DIR
-        echo "$CMAKE_OPTIONS" >CMAKE_OPTIONS
-        cmake .. -DCMAKE_INSTALL_PREFIX=$ROCKSDB_BUILD_DIR $CMAKE_OPTIONS
-        if [ $? -ne 0 ]; then
-            echo "ERROR: cmake failed"
-            exit 1
-        fi
-    else
-        cd $ROCKSDB_BUILD_DIR
-    fi
-
-    echo "Building..."
-    if [ "$RUN_VERBOSE" == "YES" ]
-    then
-        echo "RUN_VERBOSE=YES"
-        MAKE_OPTIONS="$MAKE_OPTIONS VERBOSE=1"
-    else
-        echo "RUN_VERBOSE=NO"
-    fi
-    make install -j $JOB_NUM $MAKE_OPTIONS
-    if [ $? -ne 0 ]
-    then
-        echo "ERROR: build rocksdb failed"
-        exit 1
-    else
-        echo "Build rocksdb succeed"
-    fi
-
     echo "INFO: start build pegasus..."
     cd $ROOT/src
     C_COMPILER="$C_COMPILER" CXX_COMPILER="$CXX_COMPILER" BUILD_TYPE="$BUILD_TYPE" \
         CLEAR="$CLEAR" PART_CLEAR="$PART_CLEAR" JOB_NUM="$JOB_NUM" \
-        BOOST_DIR="$BOOST_DIR" WARNING_ALL="$WARNING_ALL" ENABLE_GCOV="$ENABLE_GCOV" \
+        BOOST_DIR="$BOOST_DIR" WARNING_ALL="$WARNING_ALL" ENABLE_GCOV="$ENABLE_GCOV" SANITIZER="$SANITIZER"\
         RUN_VERBOSE="$RUN_VERBOSE" TEST_MODULE="$TEST_MODULE" DISABLE_GPERF="$DISABLE_GPERF" ./build.sh
     if [ $? -ne 0 ]; then
         echo "ERROR: build pegasus failed"
@@ -307,11 +255,13 @@ function usage_test()
     echo "   -h|--help         print the help info"
     echo "   -m|--modules      set the test modules: pegasus_unit_test pegasus_function_test"
     echo "   -k|--keep_onebox  whether keep the onebox after the test[default false]"
+    echo "   --on_travis       run tests on travis without some time-cosuming function tests"
 }
 function run_test()
 {
     local test_modules=""
     local clear_flags="1"
+    local on_travis=""
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
@@ -325,6 +275,9 @@ function run_test()
                 ;;
             -k|--keep_onebox)
                 clear_flags=""
+                ;;
+            --on_travis)
+                on_travis="--on_travis"
                 ;;
             *)
                 echo "Error: unknow option \"$key\""
@@ -344,11 +297,16 @@ function run_test()
     start_time=`date +%s`
 
     ./run.sh clear_onebox #clear the onebox before test
-    ./run.sh start_onebox -w
-
+    if ! ./run.sh start_onebox -w; then
+        echo "ERROR: unable to continue on testing because starting onebox failed"
+        exit 1
+    fi
+    
+    sed -i "s/@LOCAL_IP@/${LOCAL_IP}/g"  $ROOT/src/builder/server/test/config.ini
+    
     for module in `echo $test_modules`; do
         pushd $ROOT/src/builder/bin/$module
-        REPORT_DIR=$REPORT_DIR ./run.sh
+        REPORT_DIR=$REPORT_DIR ./run.sh $on_travis
         if [ $? != 0 ]; then
             echo "run test \"$module\" in `pwd` failed"
             exit 1
@@ -414,7 +372,11 @@ function run_start_zk()
         esac
         shift
     done
+    
     INSTALL_DIR="$INSTALL_DIR" PORT="$PORT" ./scripts/start_zk.sh
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
 }
 
 #####################
@@ -512,8 +474,11 @@ function usage_start_onebox()
     echo "                     wait cluster to become healthy, default not wait"
     echo "   -s|--server_path <str>"
     echo "                     server binary path, default is ${DSN_ROOT}/bin/pegasus_server"
+    echo "   --config_path"
+    echo "                     specify the config template path, default is ./src/server/config.min.ini in non-production env"
+    echo "                                                                  ./src/server/config.ini in production env"
     echo "   --use_product_config"
-    echo "                     use the product config template: ./src/server/config.ini"
+    echo "                     use the product config template"
 }
 
 function run_start_onebox()
@@ -523,9 +488,11 @@ function run_start_onebox()
     COLLECTOR_COUNT=0
     APP_NAME=temp
     PARTITION_COUNT=8
-    WAIT_HEALHY=false
+    WAIT_HEALTHY=false
     SERVER_PATH=${DSN_ROOT}/bin/pegasus_server
+    CONFIG_FILE=""
     USE_PRODUCT_CONFIG=false
+
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
@@ -553,10 +520,14 @@ function run_start_onebox()
                 shift
                 ;;
             -w|--wait_healthy)
-                WAIT_HEALHY=true
+                WAIT_HEALTHY=true
                 ;;
             -s|--server_path)
                 SERVER_PATH="$2"
+                shift
+                ;;
+            --config_path)
+                CONFIG_FILE="$2"
                 shift
                 ;;
             --use_product_config)
@@ -571,6 +542,7 @@ function run_start_onebox()
         esac
         shift
     done
+
     if [ ! -f ${SERVER_PATH}/pegasus_server ]; then
         echo "ERROR: file ${SERVER_PATH}/pegasus_server not exist"
         exit 1
@@ -579,36 +551,44 @@ function run_start_onebox()
         echo "ERROR: some onebox processes are running, start failed"
         exit 1
     fi
-    ln -s -f ${SERVER_PATH}/pegasus_server
-    run_start_zk
+    ln -s -f "${SERVER_PATH}/pegasus_server" "${ROOT}"
+
+    if ! run_start_zk; then
+        echo "ERROR: unable to setup onebox because zookeeper can not be started"
+        exit 1
+    fi
 
     if [ $USE_PRODUCT_CONFIG == "true" ]; then
-      cp -f ${ROOT}/src/server/config.ini ${ROOT}/config-server.ini
-      sed -i 's/\<34601\>/@META_PORT@/' ${ROOT}/config-server.ini
-      sed -i 's/\<34801\>/@REPLICA_PORT@/' ${ROOT}/config-server.ini
-      sed -i 's/%{cluster.name}/onebox/g' ${ROOT}/config-server.ini
-      sed -i 's/%{network.interface}/eth0/g' ${ROOT}/config-server.ini
-      sed -i 's/%{email.address}//g' ${ROOT}/config-server.ini
-      sed -i 's/%{app.dir}/.\/data/g' ${ROOT}/config-server.ini
-      sed -i 's/%{slog.dir}//g' ${ROOT}/config-server.ini
-      sed -i 's/%{data.dirs}//g' ${ROOT}/config-server.ini
-      sed -i 's@%{home.dir}@'"$HOME"'@g' ${ROOT}/config-server.ini
-      for i in $(seq ${META_COUNT})
-      do
-          meta_port=$((34600+i))
-          if [ $i -eq 1 ]; then
-              meta_list="${LOCAL_IP}:$meta_port"
-          else
-              meta_list="$meta_list,${LOCAL_IP}:$meta_port"
-          fi
-      done
-      sed -i 's/%{meta.server.list}/'"$meta_list"'/g' ${ROOT}/config-server.ini
-      sed -i 's/%{zk.server.list}/'"${LOCAL_IP}"':22181/g' ${ROOT}/config-server.ini
-      sed -i 's/app_name = .*$/app_name = '"$APP_NAME"'/' ${ROOT}/config-server.ini
-      sed -i 's/partition_count = .*$/partition_count = '"$PARTITION_COUNT"'/' ${ROOT}/config-server.ini
+        [ -z "${CONFIG_FILE}" ] && CONFIG_FILE=${ROOT}/src/server/config.ini
+        [ ! -f "${CONFIG_FILE}" ] && { echo "${CONFIG_FILE} is not exist"; exit 1; }
+        cp -f ${CONFIG_FILE} ${ROOT}/config-server.ini
+        sed -i 's/\<34601\>/@META_PORT@/' ${ROOT}/config-server.ini
+        sed -i 's/\<34801\>/@REPLICA_PORT@/' ${ROOT}/config-server.ini
+        sed -i 's/%{cluster.name}/onebox/g' ${ROOT}/config-server.ini
+        sed -i 's/%{network.interface}/eth0/g' ${ROOT}/config-server.ini
+        sed -i 's/%{email.address}//g' ${ROOT}/config-server.ini
+        sed -i 's/%{app.dir}/.\/data/g' ${ROOT}/config-server.ini
+        sed -i 's/%{slog.dir}//g' ${ROOT}/config-server.ini
+        sed -i 's/%{data.dirs}//g' ${ROOT}/config-server.ini
+        sed -i 's@%{home.dir}@'"$HOME"'@g' ${ROOT}/config-server.ini
+        for i in $(seq ${META_COUNT})
+        do
+            meta_port=$((34600+i))
+            if [ $i -eq 1 ]; then
+                meta_list="${LOCAL_IP}:$meta_port"
+            else
+                meta_list="$meta_list,${LOCAL_IP}:$meta_port"
+            fi
+        done
+        sed -i 's/%{meta.server.list}/'"$meta_list"'/g' ${ROOT}/config-server.ini
+        sed -i 's/%{zk.server.list}/'"${LOCAL_IP}"':22181/g' ${ROOT}/config-server.ini
+        sed -i 's/app_name = .*$/app_name = '"$APP_NAME"'/' ${ROOT}/config-server.ini
+        sed -i 's/partition_count = .*$/partition_count = '"$PARTITION_COUNT"'/' ${ROOT}/config-server.ini
     else
-      sed "s/@LOCAL_IP@/${LOCAL_IP}/g;s/@APP_NAME@/${APP_NAME}/g;s/@PARTITION_COUNT@/${PARTITION_COUNT}/g" \
-          ${ROOT}/src/server/config-server.ini >${ROOT}/config-server.ini
+        [ -z "${CONFIG_FILE}" ] && CONFIG_FILE=${ROOT}/src/server/config.min.ini
+        [ ! -f "${CONFIG_FILE}" ] && { echo "${CONFIG_FILE} is not exist"; exit 1; }
+        sed "s/@LOCAL_IP@/${LOCAL_IP}/g;s/@APP_NAME@/${APP_NAME}/g;s/@PARTITION_COUNT@/${PARTITION_COUNT}/g" \
+            ${CONFIG_FILE} >${ROOT}/config-server.ini
     fi
 
     echo "starting server"
@@ -619,10 +599,11 @@ function run_start_onebox()
     for i in $(seq ${META_COUNT})
     do
         meta_port=$((34600+i))
+        prometheus_port=$((9091+i))
         mkdir -p meta$i;
         cd meta$i
         ln -s -f ${SERVER_PATH}/pegasus_server pegasus_server
-        sed "s/@META_PORT@/$meta_port/;s/@REPLICA_PORT@/34800/" ${ROOT}/config-server.ini >config.ini
+        sed "s/@META_PORT@/$meta_port/;s/@REPLICA_PORT@/34800/;s/@PROMETHEUS_PORT@/$prometheus_port/" ${ROOT}/config-server.ini >config.ini
         echo "cd `pwd` && $PWD/pegasus_server config.ini -app_list meta &>result &"
         $PWD/pegasus_server config.ini -app_list meta &>result &
         PID=$!
@@ -631,11 +612,12 @@ function run_start_onebox()
     done
     for j in $(seq ${REPLICA_COUNT})
     do
+        prometheus_port=$((9091+${META_COUNT}+j))
         replica_port=$((34800+j))
         mkdir -p replica$j
         cd replica$j
         ln -s -f ${SERVER_PATH}/pegasus_server pegasus_server
-        sed "s/@META_PORT@/34600/;s/@REPLICA_PORT@/$replica_port/" ${ROOT}/config-server.ini >config.ini
+        sed "s/@META_PORT@/34600/;s/@REPLICA_PORT@/$replica_port/;s/@PROMETHEUS_PORT@/$prometheus_port/" ${ROOT}/config-server.ini >config.ini
         echo "cd `pwd` && $PWD/pegasus_server config.ini -app_list replica &>result &"
         $PWD/pegasus_server config.ini -app_list replica &>result &
         PID=$!
@@ -647,7 +629,7 @@ function run_start_onebox()
         mkdir -p collector
         cd collector
         ln -s -f ${SERVER_PATH}/pegasus_server pegasus_server
-        sed "s/@META_PORT@/34600/;s/@REPLICA_PORT@/34800/" ${ROOT}/config-server.ini >config.ini
+        sed "s/@META_PORT@/34600/;s/@REPLICA_PORT@/34800/;s/@PROMETHEUS_PORT@/9091/" ${ROOT}/config-server.ini >config.ini
         echo "cd `pwd` && $PWD/pegasus_server config.ini -app_list collector &>result &"
         $PWD/pegasus_server config.ini -app_list collector &>result &
         PID=$!
@@ -655,7 +637,7 @@ function run_start_onebox()
         cd ..
     fi
 
-    if [ $WAIT_HEALHY == "true" ]; then
+    if [ $WAIT_HEALTHY == "true" ]; then
         cd $ROOT
         echo "Wait cluster to become healthy..."
         sleeped=0
@@ -1471,30 +1453,49 @@ function run_clear_upgrade_test()
 function usage_bench()
 {
     echo "Options for subcommand 'bench':"
-    echo "   -h|--help            print the help info"
-    echo "   -t|--type            benchmark type, supporting:"
-    echo "                          fillseq_pegasus, fillrandom_pegasus, readrandom_pegasus, filluniquerandom_pegasus,"
-    echo "                          deleteseq_pegasus,deleterandom_pegasus,multi_set_pegasus,scan_pegasus"
-    echo "                        default is fillseq_pegasus,readrandom_pegasus"
-    echo "   -n <num>             number of key/value pairs, default 100000"
-    echo "   --cluster <str>      cluster meta lists, default '127.0.0.1:34601,127.0.0.1:34602,127.0.0.1:34603'"
-    echo "   --app_name <str>     app name, default 'temp'"
-    echo "   --thread_num <num>   number of threads, default 1"
-    echo "   --key_size <num>     key size, default 16"
-    echo "   --value_size <num>   value size, default 100"
-    echo "   --timeout <num>      timeout in milliseconds, default 1000"
+    echo "   -h|--help                 print the help info"
+    echo "   --type                    benchmark type, supporting:"
+    echo "                             fillrandom_pegasus       --pegasus write N random values with random keys list"
+    echo "                             readrandom_pegasus       --pegasus read N times with random keys list"
+    echo "                             deleterandom_pegasus     --pegasus delete N entries with random keys list"
+    echo "                             Comma-separated list of operations is going to run in the specified order."
+    echo "                             default is 'fillrandom_pegasus,readrandom_pegasus,deleterandom_pegasus'"
+    echo "   --num <num>               number of key/value pairs, default is 10000"
+    echo "   --cluster <str>           cluster meta lists, default is '127.0.0.1:34601,127.0.0.1:34602,127.0.0.1:34603'"
+    echo "   --app_name <str>          app name, default is 'temp'"
+    echo "   --thread_num <num>        number of threads, default is 1"
+    echo "   --hashkey_size <num>      hashkey size in bytes, default is 16"
+    echo "   --sortkey_size <num>      sortkey size in bytes, default is 16"
+    echo "   --value_size <num>        value size in bytes, default is 100"
+    echo "   --timeout <num>           timeout in milliseconds, default is 1000"
+    echo "   --seed <num>              seed base for random number generator, When 0 it is specified as 1000. default is 1000"
+}
+
+function fill_bench_config() {
+    sed -i "s/@TYPE@/$TYPE/g" ./config-bench.ini
+    sed -i "s/@NUM@/$NUM/g" ./config-bench.ini
+    sed -i "s/@CLUSTER@/$CLUSTER/g" ./config-bench.ini
+    sed -i "s/@APP@/$APP/g" ./config-bench.ini
+    sed -i "s/@THREAD@/$THREAD/g" ./config-bench.ini
+    sed -i "s/@HASHKEY_SIZE@/$HASHKEY_SIZE/g" ./config-bench.ini
+    sed -i "s/@SORTKEY_SIZE@/$SORTKEY_SIZE/g" ./config-bench.ini
+    sed -i "s/@VALUE_SIZE@/$VALUE_SIZE/g" ./config-bench.ini
+    sed -i "s/@TIMEOUT_MS@/$TIMEOUT_MS/g" ./config-bench.ini
+    sed -i "s/@SEED@/$SEED/g" ./config-bench.ini
 }
 
 function run_bench()
 {
-    TYPE=fillseq_pegasus,readrandom_pegasus
-    NUM=100000
+    TYPE=fillrandom_pegasus,readrandom_pegasus,deleterandom_pegasus
+    NUM=10000
     CLUSTER=127.0.0.1:34601,127.0.0.1:34602,127.0.0.1:34603
     APP=temp
     THREAD=1
-    KEY_SIZE=16
+    HASHKEY_SIZE=16
+    SORTKEY_SIZE=16
     VALUE_SIZE=100
     TIMEOUT_MS=1000
+    SEED=1000
     while [[ $# > 0 ]]; do
         key="$1"
         case $key in
@@ -1502,11 +1503,11 @@ function run_bench()
                 usage_bench
                 exit 0
                 ;;
-            -t|--type)
+            --type)
                 TYPE="$2"
                 shift
                 ;;
-            -n)
+            --num)
                 NUM="$2"
                 shift
                 ;;
@@ -1522,8 +1523,12 @@ function run_bench()
                 THREAD="$2"
                 shift
                 ;;
-            --key_size)
-                KEY_SIZE="$2"
+            --hashkey_size)
+                HASHKEY_SIZE="$2"
+                shift
+                ;;
+            --sortkey_size)
+                SORTKEY_SIZE="$2"
                 shift
                 ;;
             --value_size)
@@ -1532,6 +1537,10 @@ function run_bench()
                 ;;
             --timeout)
                 TIMEOUT_MS="$2"
+                shift
+                ;;
+            --seed)
+                SEED="$2"
                 shift
                 ;;
             *)
@@ -1543,14 +1552,12 @@ function run_bench()
         esac
         shift
     done
-
     cd ${ROOT}
-    sed -i "s/@CLUSTER@/$CLUSTER/g" ${DSN_ROOT}/bin/pegasus_bench/config.ini
+    cp ${DSN_ROOT}/bin/pegasus_bench/config.ini ./config-bench.ini
+    fill_bench_config
     ln -s -f ${DSN_ROOT}/bin/pegasus_bench/pegasus_bench
-    ./pegasus_bench --pegasus_config=${DSN_ROOT}/bin/pegasus_bench/config.ini --benchmarks=${TYPE} --pegasus_timeout_ms=${TIMEOUT_MS} \
-        --key_size=${KEY_SIZE} --value_size=${VALUE_SIZE} --threads=${THREAD} --num=${NUM} \
-        --pegasus_cluster_name=mycluster --pegasus_app_name=${APP} --stats_interval=1000 --histogram=1 \
-        --compression_ratio=1.0
+    ./pegasus_bench ./config-bench.ini
+    rm -f ./config-bench.ini
 }
 
 #####################

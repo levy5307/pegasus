@@ -3,6 +3,7 @@
 // can be found in the LICENSE file in the root directory of this source tree.
 
 #include <dsn/cpp/rpc_holder.h>
+#include <dsn/dist/replication/replication_types.h>
 #include <rrdb/rrdb_types.h>
 #include <rrdb/rrdb.client.h>
 
@@ -22,7 +23,12 @@ using incr_rpc = dsn::rpc_holder<dsn::apps::incr_request, dsn::apps::incr_respon
 using check_and_set_rpc =
     dsn::rpc_holder<dsn::apps::check_and_set_request, dsn::apps::check_and_set_response>;
 
+using duplicate_rpc = dsn::apps::duplicate_rpc;
+
 using check_and_mutate_rpc =
     dsn::rpc_holder<dsn::apps::check_and_mutate_request, dsn::apps::check_and_mutate_response>;
+
+using ingestion_rpc =
+    dsn::rpc_holder<dsn::replication::ingestion_request, dsn::replication::ingestion_response>;
 
 } // namespace pegasus

@@ -42,10 +42,10 @@ else
 fi
 version=`grep "VERSION" src/include/pegasus/version.h | cut -d "\"" -f 2`
 commit_id=`grep "GIT_COMMIT" src/include/pegasus/git_commit.h | cut -d "\"" -f 2`
-platform=`lsb_release -a 2>/dev/null | grep "Distributor ID" | awk '{print $3}' | tr '[A-Z]' '[a-z]'`
-echo "Packaging pegasus client $version ($commit_id) $platform $build_type ..."
+glibc_ver=`ldd --version | grep ldd | grep -Eo "[0-9]+.[0-9]+$"`
+echo "Packaging pegasus client $version ($commit_id) glibc-$glibc_ver $build_type ..."
 
-pack_version=client-$version-${commit_id:0:7}-${platform}-${build_type}
+pack_version=client-$version-${commit_id:0:7}-glibc${glibc_ver}-${build_type}
 pack=pegasus-$pack_version
 
 if [ -f ${pack}.tar.gz ]
@@ -93,6 +93,8 @@ copy_file `get_boost_lib $custom_boost_lib system` ${pack}/lib
 ln -sf `ls ${pack}/lib | grep libboost_system` ${pack}/lib/libboost_system.so
 copy_file `get_boost_lib $custom_boost_lib filesystem` ${pack}/lib
 ln -sf `ls ${pack}/lib | grep libboost_filesystem` ${pack}/lib/libboost_filesystem.so
+copy_file `get_boost_lib $custom_boost_lib regex` ${pack}/lib
+ln -sf `ls ${pack}/lib | grep libboost_regex` ${pack}/lib/libboost_regex.so
 
 cp -v -r ./src/include ${pack}
 

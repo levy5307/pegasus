@@ -42,10 +42,10 @@ else
 fi
 version=`grep "VERSION" src/include/pegasus/version.h | cut -d "\"" -f 2`
 commit_id=`grep "GIT_COMMIT" src/include/pegasus/git_commit.h | cut -d "\"" -f 2`
-platform=`lsb_release -a 2>/dev/null | grep "Distributor ID" | awk '{print $3}' | tr '[A-Z]' '[a-z]'`
-echo "Packaging pegasus tools $version ($commit_id) $platform $build_type ..."
+glibc_ver=`ldd --version | grep ldd | grep -Eo "[0-9]+.[0-9]+$"`
+echo "Packaging pegasus tools $version ($commit_id) glibc-$glibc_ver $build_type ..."
 
-pack_version=tools-$version-${commit_id:0:7}-${platform}-${build_type}
+pack_version=tools-$version-${commit_id:0:7}-glibc${glibc_ver}-${build_type}
 pack=pegasus-$pack_version
 
 if [ -f ${pack}.tar.gz ]
@@ -100,6 +100,7 @@ cp -v -r ./DSN_ROOT/bin/pegasus_pressureclient ${pack}/DSN_ROOT/bin/
 mkdir -p ${pack}/DSN_ROOT/lib
 copy_file ./DSN_ROOT/lib/*.so* ${pack}/DSN_ROOT/lib/
 copy_file ./rdsn/thirdparty/output/lib/libPoco*.so.48 ${pack}/DSN_ROOT/lib/
+<<<<<<< HEAD
 copy_file ./rdsn/thirdparty/output/lib/libtcmalloc.so.4 ${pack}/DSN_ROOT/lib/
 copy_file ./rdsn/thirdparty/output/lib/libsasl2.so.3.0.0 ${pack}/DSN_ROOT/lib/libsasl2.so.3
 copy_file ./rdsn/thirdparty/output/lib/libcom_err.so.3.0 ${pack}/DSN_ROOT/lib/libcom_err.so.3
@@ -111,9 +112,14 @@ copy_file ./rdsn/thirdparty/output/lib/libk5crypto.so.3.1 ${pack}/DSN_ROOT/lib/l
 mkdir -p ${pack}/DSN_ROOT/lib/sasl2
 copy_file ./rdsn/thirdparty/output/lib/sasl2/* ${pack}/DSN_ROOT/lib/sasl2
 
+=======
+copy_file ./rdsn/thirdparty/output/lib/libtcmalloc_and_profiler.so.4 ${pack}/DSN_ROOT/lib/
+>>>>>>> origin/master
 copy_file `get_boost_lib $custom_boost_lib system` ${pack}/DSN_ROOT/lib/
 copy_file `get_boost_lib $custom_boost_lib filesystem` ${pack}/DSN_ROOT/lib/
+copy_file `get_boost_lib $custom_boost_lib regex` ${pack}/DSN_ROOT/lib/
 copy_file `get_stdcpp_lib $custom_gcc` ${pack}/DSN_ROOT/lib/
+<<<<<<< HEAD
 copy_file `get_system_lib shell snappy` ${pack}/DSN_ROOT/lib/
 copy_file `get_system_lib shell crypto` ${pack}/DSN_ROOT/lib/
 copy_file `get_system_lib shell ssl` ${pack}/DSN_ROOT/lib/
@@ -122,6 +128,15 @@ copy_file `get_system_lib shell zstd` ${pack}/DSN_ROOT/lib/
 copy_file `get_system_lib shell lz4` ${pack}/DSN_ROOT/lib/
 chmod -x ${pack}/DSN_ROOT/lib/lib*
 chmod -x ${pack}/DSN_ROOT/lib/sasl2/*
+=======
+copy_file `get_system_lib shell snappy` ${pack}/DSN_ROOT/lib/`get_system_libname shell snappy`
+copy_file `get_system_lib shell crypto` ${pack}/DSN_ROOT/lib/`get_system_libname shell crypto`
+copy_file `get_system_lib shell ssl` ${pack}/DSN_ROOT/lib/`get_system_libname shell ssl`
+copy_file `get_system_lib shell aio` ${pack}/DSN_ROOT/lib/`get_system_libname shell aio`
+copy_file `get_system_lib shell zstd` ${pack}/DSN_ROOT/lib/`get_system_libname shell zstd`
+copy_file `get_system_lib shell lz4` ${pack}/DSN_ROOT/lib/`get_system_libname shell lz4`
+chmod -x ${pack}/DSN_ROOT/lib/*
+>>>>>>> origin/master
 
 mkdir -p ${pack}/scripts
 copy_file ./scripts/* ${pack}/scripts/

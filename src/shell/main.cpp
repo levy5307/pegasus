@@ -32,31 +32,35 @@ static command_executor commands[] = {
         "version", "get the shell version", "", version,
     },
     {
-        "cluster_info", "get the informations for the cluster", "", query_cluster_info,
+        "cluster_info",
+        "get the information of the cluster",
+        "[-r|--resolve_ip] [-o|--output file_name] [-j|--json]",
+        query_cluster_info,
     },
     {
         "app",
         "get the partition information for some specific app",
-        "<app_name> [-d|--detailed] [-o|--output file_name]",
+        "<app_name> [-d|--detailed] [-r|--resolve_ip] [-o|--output file_name] [-j|--json]",
         query_app,
     },
     {
         "app_disk",
         "get the disk usage information for some specific app",
-        "<app_name> [-d|--detailed] [-o|--output file_name]",
+        "<app_name> [-d|--detailed] [-r|--resolve_ip] [-j|--json] [-o|--output file_name]",
         app_disk,
     },
     {
         "ls",
         "list all apps",
-        "[-a|-all] [-d|--detailed] [-o|--output file_name] "
+        "[-a|-all] [-d|--detailed] [-j|--json] [-o|--output file_name]"
         "[-s|--status all|available|creating|dropping|dropped]",
         ls_apps,
     },
     {
         "nodes",
         "get the node status for this cluster",
-        "[-d|--detailed] [-o|--output file_name] [-s|--status all|alive|unalive]",
+        "[-d|--detailed] [-j|--json] [-r|--resolve_ip] [-u|--resource_usage]"
+        "[-o|--output file_name] [-s|--status all|alive|unalive] [-q|--qps]",
         ls_nodes,
     },
     {
@@ -103,7 +107,7 @@ static command_executor commands[] = {
         use_app_as_current,
     },
     {
-        "cc", "check in the specified cluster", "[cluster_name]", cc_command,
+        "cc", "change to the specified cluster", "[cluster_name]", cc_command,
     },
     {
         "escape_all",
@@ -227,8 +231,10 @@ static command_executor commands[] = {
         "[-a|--start_inclusive true|false] [-b|--stop_inclusive true|false] "
         "[-s|--sort_key_filter_type anywhere|prefix|postfix] "
         "[-y|--sort_key_filter_pattern str] "
-        "[-o|--output file_name] [-z|--batch_size num] [-n|--max_count num] "
-        "[-t|--timeout_ms num] [-d|--detailed] [-i|--no_value]",
+        "[-v|--value_filter_type anywhere|prefix|postfix|exact] "
+        "[-z|--value_filter_pattern str] "
+        "[-o|--output file_name] [-n|--max_count num] [-t|--timeout_ms num] "
+        "[-d|--detailed] [-i|--no_value]",
         data_operations,
     },
     {
@@ -236,74 +242,113 @@ static command_executor commands[] = {
         "scan all hash keys",
         "[-h|--hash_key_filter_type anywhere|prefix|postfix] "
         "[-x|--hash_key_filter_pattern str] "
-        "[-s|--sort_key_filter_type anywhere|prefix|postfix] "
+        "[-s|--sort_key_filter_type anywhere|prefix|postfix|exact] "
         "[-y|--sort_key_filter_pattern str] "
-        "[-o|--output file_name] [-z|--batch_size num] [-n|--max_count num] "
-        "[-t|--timeout_ms num] [-d|--detailed] [-i|--no_value] [-p|--partition num]",
+        "[-v|--value_filter_type anywhere|prefix|postfix|exact] "
+        "[-z|--value_filter_pattern str] "
+        "[-o|--output file_name] [-n|--max_count num] [-t|--timeout_ms num] "
+        "[-d|--detailed] [-i|--no_value] [-p|--partition num]",
         data_operations,
     },
     {
         "copy_data",
         "copy app data",
         "<-c|--target_cluster_name str> <-a|--target_app_name str> "
-        "[-s|--max_split_count num] [-b|--max_batch_count num] [-t|--timeout_ms num] "
-        "[-g|--geo_data]",
+        "[-p|--partition num] [-b|--max_batch_count num] [-t|--timeout_ms num] "
+        "[-h|--hash_key_filter_type anywhere|prefix|postfix] "
+        "[-x|--hash_key_filter_pattern str] "
+        "[-s|--sort_key_filter_type anywhere|prefix|postfix|exact] "
+        "[-y|--sort_key_filter_pattern str] "
+        "[-v|--value_filter_type anywhere|prefix|postfix|exact] "
+        "[-z|--value_filter_pattern str] "
+        "[-n|--no_overwrite] [-i|--no_value] [-g|--geo_data]",
         data_operations,
     },
     {
         "clear_data",
         "clear app data",
-        "[-f|--force] [-s|--max_split_count num] [-b|--max_batch_count num] "
-        "[-t|--timeout_ms num]",
+        "[-p|--partition num] [-b|--max_batch_count num] [-t|--timeout_ms num] "
+        "[-h|--hash_key_filter_type anywhere|prefix|postfix] "
+        "[-x|--hash_key_filter_pattern str] "
+        "[-s|--sort_key_filter_type anywhere|prefix|postfix|exact] "
+        "[-y|--sort_key_filter_pattern str] "
+        "[-v|--value_filter_type anywhere|prefix|postfix|exact] "
+        "[-z|--value_filter_pattern str] "
+        "[-f|--force]",
         data_operations,
     },
     {
         "count_data",
         "get app row count",
-        "[-s|--max_split_count num] [-b|--max_batch_count num] [-t|--timeout_ms num] "
-        "[-h|--count_hash_key] [-z|--stat_size] [-c|--top_count num] "
-        "[-r|--run_seconds num]",
+        "[-c|--precise][-p|--partition num] "
+        "[-b|--max_batch_count num][-t|--timeout_ms num] "
+        "[-h|--hash_key_filter_type anywhere|prefix|postfix] "
+        "[-x|--hash_key_filter_pattern str] "
+        "[-s|--sort_key_filter_type anywhere|prefix|postfix|exact] "
+        "[-y|--sort_key_filter_pattern str] "
+        "[-v|--value_filter_type anywhere|prefix|postfix|exact] "
+        "[-z|--value_filter_pattern str][-d|--diff_hash_key] "
+        "[-a|--stat_size] [-n|--top_count num] [-r|--run_seconds num]",
         data_operations,
     },
     {
         "remote_command",
         "send remote command to servers",
-        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...] "
+        "[-t all|meta-server|replica-server] [-r|--resolve_ip] [-l ip:port,ip:port...]"
         "<command> [arguments...]",
         remote_command,
     },
     {
         "server_info",
         "get info of servers",
-        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...]",
+        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...] [-r|--resolve_ip]",
         server_info,
     },
     {
         "server_stat",
         "get stat of servers",
-        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...]",
+        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...] [-r|--resolve_ip]",
         server_stat,
     },
     {
         "app_stat",
         "get stat of apps",
-        "[-a|--app_name str] [-q|--only_qps] [-o|--output file_name]",
+        "[-a|--app_name str] [-q|--only_qps] [-u|--only_usage] [-j|--json] "
+        "[-o|--output file_name]",
         app_stat,
     },
     {
         "flush_log",
         "flush log of servers",
-        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...]",
+        "[-t all|meta-server|replica-server] [-l ip:port,ip:port...][-r|--resolve_ip]",
         flush_log,
     },
     {
         "local_get", "get value from local db", "<db_path> <hash_key> <sort_key>", local_get,
     },
     {
+        "rdb_key_str2hex",
+        "transform the given hashkey and sortkey to rocksdb raw key in hex representation",
+        "<hash_key> <sort_key>",
+        rdb_key_str2hex,
+    },
+    {
+        "rdb_key_hex2str",
+        "transform the given rocksdb raw key in hex representation to hash key and sort key",
+        "<rdb_key_in_hex>",
+        rdb_key_hex2str,
+    },
+    {
+        "rdb_value_hex2str",
+        "parse the given rocksdb raw value in hex representation",
+        "<value_in_hex>",
+        rdb_value_hex2str,
+    },
+    {
         "sst_dump",
         "dump sstable dir or files",
         "[--command=check|scan|none|raw] <--file=data_dir_OR_sst_file> "
-        "[--from=user_key] [--to=user_key] [--read_num=num] [--show_properties]",
+        "[--from=user_key] [--to=user_key] [--read_num=num] [--show_properties] [--pegasus_data]",
         sst_dump,
     },
     {
@@ -370,7 +415,7 @@ static command_executor commands[] = {
         query_restore_status,
     },
     {
-        "get_app_envs", "get current app envs", "", get_app_envs,
+        "get_app_envs", "get current app envs", "[-j|--json]", get_app_envs,
     },
     {
         "set_app_envs", "set current app envs", "<key> <value> [key value...]", set_app_envs,
@@ -388,6 +433,23 @@ static command_executor commands[] = {
         "[-s|--skip_prompt] [-o|--output file_name]",
         ddd_diagnose,
     },
+    {"add_dup", "add duplication", "<app_name> <remote_cluster_name> [-f|--freezed]", add_dup},
+    {"query_dup", "query duplication info", "<app_name> [-d|--detail]", query_dup},
+    {"remove_dup", "remove duplication", "<app_name> <dup_id>", remove_dup},
+    {"start_dup", "start duplication", "<app_name> <dup_id>", start_dup},
+    {"pause_dup", "pause duplication", "<app_name> <dup_id>", pause_dup},
+    {"disk_capacity",
+     "query disk capacity info",
+     "[-n|--node replica_server(ip:port)][-o|--out file_name][-j|-json][-d|--detail]",
+     query_disk_capacity},
+    {"disk_replica",
+     "query disk replica count info",
+     "[-n|--node replica_server(ip:port)][-a|-app app_name][-o|--out file_name][-j|--json]",
+     query_disk_replica},
+    {"set_dup_fail_mode",
+     "set fail_mode of duplication",
+     "<app_name> <dup_id> <slow|skip>",
+     set_dup_fail_mode},
     {
         "set_acl",
         "set an acl entry, only support RW now",
@@ -605,20 +667,3 @@ int main(int argc, char **argv)
     run();
     return 0;
 }
-
-#include <dsn/git_commit.h>
-#include <dsn/version.h>
-#include <pegasus/git_commit.h>
-#include <pegasus/version.h>
-static char const rcsid[] =
-    "$Version: Pegasus Shell " PEGASUS_VERSION " (" PEGASUS_GIT_COMMIT ")"
-#if defined(DSN_BUILD_TYPE)
-    " " STR(DSN_BUILD_TYPE)
-#endif
-        ", built with rDSN " DSN_CORE_VERSION " (" DSN_GIT_COMMIT ")"
-        ", built by gcc " STR(__GNUC__) "." STR(__GNUC_MINOR__) "." STR(__GNUC_PATCHLEVEL__)
-#if defined(DSN_BUILD_HOSTNAME)
-            ", built on " STR(DSN_BUILD_HOSTNAME)
-#endif
-                ", built at " __DATE__ " " __TIME__ " $";
-const char *pegasus_shell_rcsid() { return rcsid; }

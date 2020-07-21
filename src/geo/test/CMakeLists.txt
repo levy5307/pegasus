@@ -15,10 +15,10 @@ set(MY_PROJ_LIBS
         s2testing
         s2
         pegasus_client_static
-        fmt
+        dsn_utils
         gtest)
 
-set(MY_BOOST_PACKAGES system filesystem)
+set(MY_BOOST_LIBS Boost::system Boost::filesystem)
 
 add_definitions(-Wno-attributes)
 

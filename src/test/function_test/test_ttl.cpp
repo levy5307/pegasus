@@ -37,9 +37,10 @@ void set_default_ttl(int ttl)
 
     std::string env = envs[TABLE_LEVEL_DEFAULT_TTL];
     if ((env.empty() && ttl != 0) || env != std::to_string(ttl)) {
-        dsn::error_code ec = ddl_client->set_app_envs(
+        auto response = ddl_client->set_app_envs(
             client->get_app_name(), {TABLE_LEVEL_DEFAULT_TTL}, {std::to_string(ttl)});
-        ASSERT_EQ(ERR_OK, ec);
+        ASSERT_EQ(true, response.is_ok());
+        ASSERT_EQ(ERR_OK, response.get_value().err);
 
         // wait envs to be synced.
         std::this_thread::sleep_for(std::chrono::seconds(sleep_for_envs_effect));
@@ -99,10 +100,11 @@ TEST(ttl, set_without_default_ttl)
     ASSERT_EQ(ttl_test_value_2, value);
 
     // trigger a manual compaction
-    dsn::error_code ec = ddl_client->set_app_envs(client->get_app_name(),
-                                                  {MANUAL_COMPACT_ONCE_TRIGGER_TIME_KEY},
-                                                  {std::to_string(time(nullptr))});
-    ASSERT_EQ(ERR_OK, ec);
+    auto response = ddl_client->set_app_envs(client->get_app_name(),
+                                             {MANUAL_COMPACT_ONCE_TRIGGER_TIME_KEY},
+                                             {std::to_string(time(nullptr))});
+    ASSERT_EQ(true, response.is_ok());
+    ASSERT_EQ(ERR_OK, response.get_value().err);
 
     // wait envs to be synced, and manual lcompaction has been finished.
     std::this_thread::sleep_for(std::chrono::seconds(sleep_for_envs_effect));
@@ -148,7 +150,7 @@ TEST(ttl, set_with_default_ttl)
     int ttl_seconds;
     ret = client->ttl(ttl_hash_key, ttl_test_sort_key_1, ttl_seconds);
     ASSERT_EQ(PERR_OK, ret);
-    ASSERT_TRUE(ttl_seconds > specify_ttl - error_allow && ttl_seconds <= specify_ttl)
+    ASSERT_TRUE(ttl_seconds >= specify_ttl - error_allow && ttl_seconds <= specify_ttl)
         << "ttl is " << ttl_seconds;
 
     // set without ttl
@@ -161,7 +163,7 @@ TEST(ttl, set_with_default_ttl)
 
     ret = client->ttl(ttl_hash_key, ttl_test_sort_key_2, ttl_seconds);
     ASSERT_EQ(PERR_OK, ret);
-    ASSERT_TRUE(ttl_seconds > default_ttl - error_allow && ttl_seconds <= default_ttl)
+    ASSERT_TRUE(ttl_seconds >= default_ttl - error_allow && ttl_seconds <= default_ttl)
         << "ttl is " << ttl_seconds;
 
     // sleep a while
@@ -182,8 +184,8 @@ TEST(ttl, set_with_default_ttl)
     // check exist one
     ret = client->ttl(ttl_hash_key, ttl_test_sort_key_2, ttl_seconds);
     ASSERT_EQ(PERR_OK, ret);
-    ASSERT_TRUE(ttl_seconds > default_ttl - sleep_for_expiring - error_allow &&
-                ttl_seconds <= default_ttl - sleep_for_expiring)
+    ASSERT_TRUE(ttl_seconds >= default_ttl - sleep_for_expiring - error_allow &&
+                ttl_seconds <= default_ttl - sleep_for_expiring + error_allow)
         << "ttl is " << ttl_seconds;
 
     ret = client->get(ttl_hash_key, ttl_test_sort_key_2, value);
@@ -191,10 +193,11 @@ TEST(ttl, set_with_default_ttl)
     ASSERT_EQ(ttl_test_value_2, value);
 
     // trigger a manual compaction
-    dsn::error_code ec = ddl_client->set_app_envs(client->get_app_name(),
-                                                  {MANUAL_COMPACT_ONCE_TRIGGER_TIME_KEY},
-                                                  {std::to_string(time(nullptr))});
-    ASSERT_EQ(ERR_OK, ec);
+    auto response = ddl_client->set_app_envs(client->get_app_name(),
+                                             {MANUAL_COMPACT_ONCE_TRIGGER_TIME_KEY},
+                                             {std::to_string(time(nullptr))});
+    ASSERT_EQ(true, response.is_ok());
+    ASSERT_EQ(ERR_OK, response.get_value().err);
 
     // wait envs to be synced, and manual compaction has been finished.
     std::this_thread::sleep_for(std::chrono::seconds(sleep_for_envs_effect));
@@ -202,8 +205,8 @@ TEST(ttl, set_with_default_ttl)
     // check forever one
     ret = client->ttl(ttl_hash_key, ttl_test_sort_key_0, ttl_seconds);
     ASSERT_EQ(PERR_OK, ret);
-    ASSERT_TRUE(ttl_seconds > default_ttl - sleep_for_envs_effect - error_allow &&
-                ttl_seconds <= default_ttl - error_allow)
+    ASSERT_TRUE(ttl_seconds >= default_ttl - sleep_for_envs_effect - error_allow &&
+                ttl_seconds <= default_ttl + error_allow)
         << "ttl is " << ttl_seconds;
 
     // check expired one
@@ -216,8 +219,8 @@ TEST(ttl, set_with_default_ttl)
     // check exist one
     ret = client->ttl(ttl_hash_key, ttl_test_sort_key_2, ttl_seconds);
     ASSERT_EQ(PERR_OK, ret);
-    ASSERT_TRUE(ttl_seconds >
-                    default_ttl - sleep_for_expiring - sleep_for_envs_effect - error_allow &&
-                ttl_seconds <= default_ttl - sleep_for_expiring - sleep_for_envs_effect)
+    ASSERT_TRUE(
+        ttl_seconds >= default_ttl - sleep_for_expiring - sleep_for_envs_effect - error_allow &&
+        ttl_seconds <= default_ttl - sleep_for_expiring - sleep_for_envs_effect + error_allow)
         << "ttl is " << ttl_seconds;
 }

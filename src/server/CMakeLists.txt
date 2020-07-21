@@ -9,23 +9,20 @@ set(MY_PROJ_SRC "")
 # "GLOB" for non-recursive search
 set(MY_SRC_SEARCH_MODE "GLOB")
 
-set(MY_PROJ_INC_PATH
-    "${PEGASUS_PROJECT_DIR}/rocksdb")
-
-set(MY_PROJ_LIB_PATH
-    "${PEGASUS_PROJECT_DIR}/rocksdb/build")
-
 set(MY_PROJ_LIBS
     dsn_replica_server
     dsn_meta_server
     dsn_replication_common
-    dsn.replication.ddlclient
+    dsn_client
     dsn.block_service.local
     dsn.block_service.fds
+    dsn.block_service
     dsn.failure_detector
-    dsn.failure_detector.multimaster
     dsn.replication.zookeeper_provider
+    dsn_utils
+    RocksDB::rocksdb
     pegasus_reporter
+    pegasus_base
     pegasus_client_static
     zookeeper_mt
     event
@@ -34,15 +31,9 @@ set(MY_PROJ_LIBS
     PocoFoundation
     PocoNetSSL
     PocoJSON
-    crypto
-    fmt
-    ${ROCKSDB_LINK_LIBRARIES}
-    z
-    rt
-    aio
-    pthread)
+    )
 
-set(MY_BOOST_PACKAGES system filesystem)
+set(MY_BOOST_LIBS Boost::system Boost::filesystem Boost::regex)
 
 set(MY_BINPLACES "${CMAKE_CURRENT_SOURCE_DIR}/config.ini")
 

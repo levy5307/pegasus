@@ -88,6 +88,14 @@ t
 LOG
 
 .vscode/
+.history/
 
 .shell-history
+<<<<<<< HEAD
 .history/
+=======
+PACKAGE
+scripts/py_utils/*.pyc
+cmake-build-debug
+packages
+>>>>>>> origin/master

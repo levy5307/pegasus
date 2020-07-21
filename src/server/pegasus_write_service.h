@@ -6,6 +6,8 @@
 
 #include <dsn/perf_counter/perf_counter_wrapper.h>
 #include <dsn/dist/replication/replica_base.h>
+#include <dsn/dist/replication/duplication_common.h>
+#include <dsn/dist/replication/replication_types.h>
 
 #include "base/pegasus_value_schema.h"
 #include "base/pegasus_utils.h"
@@ -14,13 +16,77 @@
 namespace pegasus {
 namespace server {
 
+inline uint8_t get_current_cluster_id()
+{
+    static const uint8_t cluster_id =
+        dsn::replication::get_duplication_cluster_id(dsn::replication::get_current_cluster_name())
+            .get_value();
+    return cluster_id;
+}
+
+// The context of an mutation to the database.
+struct db_write_context
+{
+    // the mutation decree
+    int64_t decree{0};
+
+    // The time when this mutation is generated.
+    // This is used to calculate the new timetag.
+    uint64_t timestamp{0};
+
+    // timetag of the remote write, 0 if it's not from remote.
+    uint64_t remote_timetag{0};
+
+    // Whether to compare the timetag of old value with the new write's.
+    // - If true, it requires a read to the DB before write. If the old record has a larger timetag
+    // than `remote_timetag`, the write will be ignored, otherwise it will be applied.
+    // - If false, no overhead for the write but the eventual consistency on duplication
+    // is not guaranteed.
+    //
+    // This is for duplicated write only. Because under casual consistency, the former
+    // duplicated write must **happen before** the latest local write, regardless whether
+    // its timestamp is larger. This relationship can be easily proved:
+    // ```
+    //      T1(put "a") > T2(duplicated put "b") > T3(put "b" in remote cluster)
+    // ```
+    // However write conflict may still result in inconsistent data in different clusters,
+    // though those "versions" can all be considered as latest. User who requires consistency
+    // can read from one main cluster instead of reading from multiple.
+    bool verify_timetag{false};
+
+    static inline db_write_context empty(int64_t d) { return create(d, 0); }
+
+    // Creates a context for normal write.
+    static inline db_write_context create(int64_t decree, uint64_t timestamp)
+    {
+        db_write_context ctx;
+        ctx.decree = decree;
+        ctx.timestamp = timestamp;
+        return ctx;
+    }
+
+    // Creates a context for duplicated write.
+    static inline db_write_context
+    create_duplicate(int64_t decree, uint64_t remote_timetag, bool verify_timetag)
+    {
+        db_write_context ctx;
+        ctx.decree = decree;
+        ctx.remote_timetag = remote_timetag;
+        ctx.verify_timetag = verify_timetag;
+        return ctx;
+    }
+
+    bool is_duplicated_write() const { return remote_timetag > 0; }
+};
+
 class pegasus_server_impl;
+class capacity_unit_calculator;
 
 /// Handle the write requests.
 /// As the signatures imply, this class is not responsible for replying the rpc,
 /// the caller(pegasus_server_write) should do.
 /// \see pegasus::server::pegasus_server_write::on_batched_write_requests
-class pegasus_write_service
+class pegasus_write_service : dsn::replication::replica_base
 {
 public:
     explicit pegasus_write_service(pegasus_server_impl *server);
@@ -33,7 +99,7 @@ public:
     int empty_put(int64_t decree);
 
     // Write MULTI_PUT record.
-    int multi_put(int64_t decree,
+    int multi_put(const db_write_context &ctx,
                   const dsn::apps::multi_put_request &update,
                   dsn::apps::update_response &resp);
 
@@ -55,11 +121,17 @@ public:
                          const dsn::apps::check_and_mutate_request &update,
                          dsn::apps::check_and_mutate_response &resp);
 
+    // Handles DUPLICATE duplicated from remote.
+    int duplicate(int64_t decree,
+                  const dsn::apps::duplicate_request &update,
+                  dsn::apps::duplicate_response &resp);
+
+    // Execute bulk load ingestion
+    int ingestion_files(int64_t decree,
+                        const dsn::replication::ingestion_request &req,
+                        dsn::replication::ingestion_response &resp);
+
     /// For batch write.
-    /// NOTE: A batch write may incur a database read for consistency check of timetag.
-    /// (see pegasus::pegasus_value_generator::generate_value_v1 for more info about timetag)
-    /// To disable the consistency check, unset `verify_timetag` under `pegasus.server` section
-    /// in configuration.
 
     // Prepare batch write.
     void batch_prepare(int64_t decree);
@@ -67,7 +139,7 @@ public:
     // Add PUT record in batch write.
     // \returns 0 if success, non-0 if failure.
     // NOTE that `resp` should not be moved or freed while the batch is not committed.
-    int batch_put(int64_t decree,
+    int batch_put(const db_write_context &ctx,
                   const dsn::apps::update_request &update,
                   dsn::apps::update_response &resp);
 
@@ -91,12 +163,18 @@ private:
 
 private:
     friend class pegasus_write_service_test;
+    friend class pegasus_write_service_impl_test;
     friend class pegasus_server_write_test;
+
+    pegasus_server_impl *_server;
 
     class impl;
     std::unique_ptr<impl> _impl;
 
     uint64_t _batch_start_time;
+
+    capacity_unit_calculator *_cu_calculator;
+    int64_t _dup_lagging_write_threshold_ms;
 
     ::dsn::perf_counter_wrapper _pfc_put_qps;
     ::dsn::perf_counter_wrapper _pfc_multi_put_qps;
@@ -105,6 +183,9 @@ private:
     ::dsn::perf_counter_wrapper _pfc_incr_qps;
     ::dsn::perf_counter_wrapper _pfc_check_and_set_qps;
     ::dsn::perf_counter_wrapper _pfc_check_and_mutate_qps;
+    ::dsn::perf_counter_wrapper _pfc_duplicate_qps;
+    ::dsn::perf_counter_wrapper _pfc_dup_time_lag;
+    ::dsn::perf_counter_wrapper _pfc_dup_lagging_writes;
 
     ::dsn::perf_counter_wrapper _pfc_put_latency;
     ::dsn::perf_counter_wrapper _pfc_multi_put_latency;

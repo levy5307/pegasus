@@ -42,10 +42,10 @@ else
 fi
 version=`grep "VERSION" src/include/pegasus/version.h | cut -d "\"" -f 2`
 commit_id=`grep "GIT_COMMIT" src/include/pegasus/git_commit.h | cut -d "\"" -f 2`
-platform=`lsb_release -a 2>/dev/null | grep "Distributor ID" | awk '{print $3}' | tr '[A-Z]' '[a-z]'`
-echo "Packaging pegasus server $version ($commit_id) $platform $build_type ..."
+glibc_ver=`ldd --version | grep ldd | grep -Eo "[0-9]+.[0-9]+$"`
+echo "Packaging pegasus server $version ($commit_id) glibc-$glibc_ver $build_type ..."
 
-pack_version=server-$version-${commit_id:0:7}-${platform}-${build_type}
+pack_version=server-$version-${commit_id:0:7}-glibc${glibc_ver}-${build_type}
 pack=pegasus-$pack_version
 
 if [ -f ${pack}.tar.gz ]
@@ -90,7 +90,9 @@ mkdir -p ${pack}/bin
 copy_file ./DSN_ROOT/bin/pegasus_server/pegasus_server ${pack}/bin
 copy_file ./DSN_ROOT/lib/libdsn_meta_server.so ${pack}/bin
 copy_file ./DSN_ROOT/lib/libdsn_replica_server.so ${pack}/bin
+copy_file ./DSN_ROOT/lib/libdsn_utils.so ${pack}/bin
 copy_file ./rdsn/thirdparty/output/lib/libPoco*.so.48 ${pack}/bin
+<<<<<<< HEAD
 copy_file ./rdsn/thirdparty/output/lib/libtcmalloc.so.4 ${pack}/bin
 copy_file ./rdsn/thirdparty/output/lib/libsasl2.so.3.0.0 ${pack}/bin/libsasl2.so.3
 copy_file ./rdsn/thirdparty/output/lib/libcom_err.so.3.0 ${pack}/bin/libcom_err.so.3
@@ -102,17 +104,41 @@ copy_file ./rdsn/thirdparty/output/lib/libk5crypto.so.3.1 ${pack}/bin/libk5crypt
 mkdir -p ${pack}/bin/sasl2
 copy_file ./rdsn/thirdparty/output/lib/sasl2/* ${pack}/bin/sasl2
 
+=======
+copy_file ./rdsn/thirdparty/output/lib/libtcmalloc_and_profiler.so.4 ${pack}/bin
+>>>>>>> origin/master
 copy_file ./scripts/sendmail.sh ${pack}/bin
 copy_file ./src/server/config.ini ${pack}/bin
 
 copy_file `get_boost_lib $custom_boost_lib system` ${pack}/bin
 copy_file `get_boost_lib $custom_boost_lib filesystem` ${pack}/bin
+copy_file `get_boost_lib $custom_boost_lib regex` ${pack}/bin
 copy_file `get_stdcpp_lib $custom_gcc` ${pack}/bin
+<<<<<<< HEAD
 copy_file `get_system_lib server snappy` ${pack}/bin
 copy_file `get_system_lib server crypto` ${pack}/bin
 copy_file `get_system_lib server aio` ${pack}/bin
 copy_file `get_system_lib server zstd` ${pack}/bin
 copy_file `get_system_lib server lz4` ${pack}/bin
+=======
+copy_file `get_system_lib server snappy` ${pack}/bin/`get_system_libname server snappy`
+copy_file `get_system_lib server crypto` ${pack}/bin/`get_system_libname server crypto`
+copy_file `get_system_lib server ssl` ${pack}/bin/`get_system_libname server ssl`
+copy_file `get_system_lib server aio` ${pack}/bin/`get_system_libname server aio`
+copy_file `get_system_lib server zstd` ${pack}/bin/`get_system_libname server zstd`
+copy_file `get_system_lib server lz4` ${pack}/bin/`get_system_libname server lz4`
+
+DISTRIB_ID=$(cat /etc/*-release | grep DISTRIB_ID | awk -F'=' '{print $2}')
+DISTRIB_RELEASE=$(cat /etc/*-release | grep DISTRIB_RELEASE | awk -F'=' '{print $2}')
+if [ -n "$DISTRIB_ID" ] && [ -n "$DISTRIB_RELEASE" ]; then
+  if [ "$DISTRIB_ID" == "Ubuntu" ] && [ "$DISTRIB_RELEASE" == "18.04" ]; then
+    copy_file "$(get_system_lib server icui18n)" "$pack/bin/$(get_system_libname server icui18n)"
+    copy_file "$(get_system_lib server icuuc)" "$pack/bin/$(get_system_libname server icuuc)"
+    copy_file "$(get_system_lib server icudata)" "$pack/bin/$(get_system_libname server icudata)"
+  fi
+  # more cases can be added here.
+fi
+>>>>>>> origin/master
 
 chmod +x ${pack}/bin/pegasus_* ${pack}/bin/*.sh
 chmod -x ${pack}/bin/lib*
@@ -128,5 +154,7 @@ if [ -f $pack_template ]; then
     sed -i "/^build:/c build: \"\.\/run.sh pack\"" $pack_template
     sed -i "/^source:/c source: \"$PEGASUS_ROOT\"" $pack_template
 fi
+
+echo ${pack} > PACKAGE
 
 echo "Done"
