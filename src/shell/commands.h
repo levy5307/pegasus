@@ -257,3 +257,15 @@ bool load_acl_entries(shell_context *sc,
 bool set_acl(command_executor *e, shell_context *sc, arguments args);
 
 bool query_disk_replica(command_executor *e, shell_context *sc, arguments args);
+
+// == bulk load (see 'commands/bulk_load.cpp') == //
+
+bool start_bulk_load(command_executor *e, shell_context *sc, arguments args);
+
+bool query_bulk_load_status(command_executor *e, shell_context *sc, arguments args);
+
+bool pause_bulk_load(command_executor *e, shell_context *sc, arguments args);
+
+bool restart_bulk_load(command_executor *e, shell_context *sc, arguments args);
+
+bool cancel_bulk_load(command_executor *e, shell_context *sc, arguments args);

@@ -7,7 +7,6 @@ function usage()
     echo "Options for subcommand 'pack_tools':"
     echo "  -h"
     echo "  -p|--update-package-template <minos-package-template-file-path>"
-    echo "  -b|--custom-boost-lib"
     echo "  -g|--custom-gcc"
     exit 0
 }
@@ -63,7 +62,6 @@ if [ -n "$MINOS_CONFIG_FILE" ]; then
     pack_template=`dirname $MINOS_CONFIG_FILE`/xiaomi-config/package/pegasus.yaml
 fi
 
-custom_boost_lib="false"
 custom_gcc="false"
 
 while [[ $# > 0 ]]; do
@@ -72,9 +70,6 @@ while [[ $# > 0 ]]; do
         -p|--update-package-template)
             pack_template="$2"
             shift
-            ;;
-        -b|--custom-boost-lib)
-            custom_boost_lib="true"
             ;;
         -g|--custom-gcc)
             custom_gcc="true"
@@ -100,8 +95,7 @@ cp -v -r ./DSN_ROOT/bin/pegasus_pressureclient ${pack}/DSN_ROOT/bin/
 mkdir -p ${pack}/DSN_ROOT/lib
 copy_file ./DSN_ROOT/lib/*.so* ${pack}/DSN_ROOT/lib/
 copy_file ./rdsn/thirdparty/output/lib/libPoco*.so.48 ${pack}/DSN_ROOT/lib/
-<<<<<<< HEAD
-copy_file ./rdsn/thirdparty/output/lib/libtcmalloc.so.4 ${pack}/DSN_ROOT/lib/
+copy_file ./rdsn/thirdparty/output/lib/libtcmalloc_and_profiler.so.4 ${pack}/DSN_ROOT/lib/
 copy_file ./rdsn/thirdparty/output/lib/libsasl2.so.3.0.0 ${pack}/DSN_ROOT/lib/libsasl2.so.3
 copy_file ./rdsn/thirdparty/output/lib/libcom_err.so.3.0 ${pack}/DSN_ROOT/lib/libcom_err.so.3
 copy_file ./rdsn/thirdparty/output/lib/libkrb5support.so.0.1 ${pack}/DSN_ROOT/lib/libkrb5support.so.0
@@ -112,23 +106,11 @@ copy_file ./rdsn/thirdparty/output/lib/libk5crypto.so.3.1 ${pack}/DSN_ROOT/lib/l
 mkdir -p ${pack}/DSN_ROOT/lib/sasl2
 copy_file ./rdsn/thirdparty/output/lib/sasl2/* ${pack}/DSN_ROOT/lib/sasl2
 
-=======
-copy_file ./rdsn/thirdparty/output/lib/libtcmalloc_and_profiler.so.4 ${pack}/DSN_ROOT/lib/
->>>>>>> origin/master
 copy_file `get_boost_lib $custom_boost_lib system` ${pack}/DSN_ROOT/lib/
 copy_file `get_boost_lib $custom_boost_lib filesystem` ${pack}/DSN_ROOT/lib/
 copy_file `get_boost_lib $custom_boost_lib regex` ${pack}/DSN_ROOT/lib/
+copy_file ./rdsn/thirdparty/output/lib/libboost*.so.1.69.0 ${pack}/DSN_ROOT/lib/
 copy_file `get_stdcpp_lib $custom_gcc` ${pack}/DSN_ROOT/lib/
-<<<<<<< HEAD
-copy_file `get_system_lib shell snappy` ${pack}/DSN_ROOT/lib/
-copy_file `get_system_lib shell crypto` ${pack}/DSN_ROOT/lib/
-copy_file `get_system_lib shell ssl` ${pack}/DSN_ROOT/lib/
-copy_file `get_system_lib shell aio` ${pack}/DSN_ROOT/lib/
-copy_file `get_system_lib shell zstd` ${pack}/DSN_ROOT/lib/
-copy_file `get_system_lib shell lz4` ${pack}/DSN_ROOT/lib/
-chmod -x ${pack}/DSN_ROOT/lib/lib*
-chmod -x ${pack}/DSN_ROOT/lib/sasl2/*
-=======
 copy_file `get_system_lib shell snappy` ${pack}/DSN_ROOT/lib/`get_system_libname shell snappy`
 copy_file `get_system_lib shell crypto` ${pack}/DSN_ROOT/lib/`get_system_libname shell crypto`
 copy_file `get_system_lib shell ssl` ${pack}/DSN_ROOT/lib/`get_system_libname shell ssl`
@@ -136,7 +118,7 @@ copy_file `get_system_lib shell aio` ${pack}/DSN_ROOT/lib/`get_system_libname sh
 copy_file `get_system_lib shell zstd` ${pack}/DSN_ROOT/lib/`get_system_libname shell zstd`
 copy_file `get_system_lib shell lz4` ${pack}/DSN_ROOT/lib/`get_system_libname shell lz4`
 chmod -x ${pack}/DSN_ROOT/lib/*
->>>>>>> origin/master
+chmod -x ${pack}/DSN_ROOT/lib/sasl2/*
 
 mkdir -p ${pack}/scripts
 copy_file ./scripts/* ${pack}/scripts/
