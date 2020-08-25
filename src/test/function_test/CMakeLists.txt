@@ -33,6 +33,9 @@ set(MY_PROJ_LIBS
     dsn_utils
     pegasus_client_static
     gtest
+    sasl2
+    gssapi_krb5
+    krb5
     )
 
 set(MY_BOOST_LIBS Boost::system Boost::filesystem Boost::regex)
