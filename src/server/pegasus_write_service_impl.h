@@ -708,16 +708,6 @@ private:
         return false;
     }
 
-    uint32_t db_expire_ts(uint32_t expire_ts)
-    {
-        // use '_default_ttl' when ttl is not set for this write operation.
-        if (_default_ttl != 0 && expire_ts == 0) {
-            return utils::epoch_now() + _default_ttl;
-        }
-
-        return expire_ts;
-    }
-
 private:
     friend class pegasus_write_service_test;
     friend class pegasus_server_write_test;

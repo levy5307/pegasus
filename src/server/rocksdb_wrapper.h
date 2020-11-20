@@ -51,7 +51,10 @@ public:
 
     int db_get(dsn::string_view raw_key, /*out*/ db_get_context *ctx);
 
+
 private:
+    uint32_t db_expire_ts(uint32_t expire_ts);
+
     pegasus_value_generator _value_generator;
 };
 } // namespace server

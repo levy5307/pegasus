@@ -162,5 +162,15 @@ int rocksdb_wrapper::db_get(dsn::string_view raw_key, /*out*/ db_get_context *ct
                    utils::c_escape_string(sort_key));
     return s.code();
 }
+
+uint32_t rocksdb_wrapper::db_expire_ts(uint32_t expire_ts)
+{
+    // use '_default_ttl' when ttl is not set for this write operation.
+    if (_default_ttl != 0 && expire_ts == 0) {
+        return utils::epoch_now() + _default_ttl;
+    }
+
+    return expire_ts;
+}
 } // namespace server
 } // namespace pegasus
