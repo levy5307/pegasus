@@ -73,7 +73,7 @@ private:
                                                            const std::string &key,
                                                            std::string *value);
 
-    friend class pegasus_write_service;
+    friend class rocksdb_wrapper;
 
     // Keys of meta data wrote into meta column family.
     static const std::string DATA_VERSION;

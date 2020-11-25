@@ -25,6 +25,7 @@
 
 #include "base/pegasus_key_schema.h"
 #include "meta_store.h"
+#include "rocksdb_wrapper.h"
 
 #include <dsn/utility/fail_point.h>
 #include <dsn/utility/filesystem.h>
@@ -90,24 +91,24 @@ public:
           _pegasus_data_version(server->_pegasus_data_version),
           _db(server->_db),
           _data_cf(server->_data_cf),
-          _meta_cf(server->_meta_cf),
           _rd_opts(server->_data_cf_rd_opts),
           _default_ttl(0),
           _pfc_recent_expire_count(server->_pfc_recent_expire_count)
     {
-        // disable write ahead logging as replication handles logging instead now
-        _wt_opts.disableWAL = true;
+        _rocksdb_wrapper =
+            dsn::make_unique<rocksdb_wrapper>(server, _db, server->_meta_cf, _pegasus_data_version);
     }
 
     int empty_put(int64_t decree)
     {
-        int err = db_write_batch_put(decree, dsn::string_view(), dsn::string_view(), 0);
+        int err =
+            _rocksdb_wrapper->db_write_batch_put(decree, dsn::string_view(), dsn::string_view(), 0);
         if (err) {
             clear_up_batch_states(decree, err);
             return err;
         }
 
-        err = db_write(decree);
+        err = _rocksdb_wrapper->db_write(decree);
 
         clear_up_batch_states(decree, err);
         return err;
@@ -133,17 +134,18 @@ public:
         }
 
         for (auto &kv : update.kvs) {
-            resp.error = db_write_batch_put_ctx(ctx,
-                                                composite_raw_key(update.hash_key, kv.key),
-                                                kv.value,
-                                                static_cast<uint32_t>(update.expire_ts_seconds));
+            resp.error = _rocksdb_wrapper->db_write_batch_put_ctx(
+                ctx,
+                composite_raw_key(update.hash_key, kv.key),
+                kv.value,
+                static_cast<uint32_t>(update.expire_ts_seconds));
             if (resp.error) {
                 clear_up_batch_states(decree, resp.error);
                 return resp.error;
             }
         }
 
-        resp.error = db_write(decree);
+        resp.error = _rocksdb_wrapper->db_write(decree);
 
         clear_up_batch_states(decree, resp.error);
         return resp.error;
@@ -168,15 +170,15 @@ public:
         }
 
         for (auto &sort_key : update.sort_keys) {
-            resp.error =
-                db_write_batch_delete(decree, composite_raw_key(update.hash_key, sort_key));
+            resp.error = _rocksdb_wrapper->db_write_batch_delete(
+                decree, composite_raw_key(update.hash_key, sort_key));
             if (resp.error) {
                 clear_up_batch_states(decree, resp.error);
                 return resp.error;
             }
         }
 
-        resp.error = db_write(decree);
+        resp.error = _rocksdb_wrapper->db_write(decree);
         if (resp.error == 0) {
             resp.count = update.sort_keys.size();
         }
@@ -196,7 +198,7 @@ public:
         int64_t new_value = 0;
         uint32_t new_expire_ts = 0;
         db_get_context get_ctx;
-        int err = db_get(raw_key, &get_ctx);
+        int err = _rocksdb_wrapper->db_get(raw_key, &get_ctx);
         if (err != 0) {
             resp.error = err;
             return err;
@@ -254,14 +256,14 @@ public:
             }
         }
 
-        resp.error =
-            db_write_batch_put(decree, update.key, std::to_string(new_value), new_expire_ts);
+        resp.error = _rocksdb_wrapper->db_write_batch_put(
+            decree, update.key, std::to_string(new_value), new_expire_ts);
         if (resp.error) {
             clear_up_batch_states(decree, resp.error);
             return resp.error;
         }
 
-        resp.error = db_write(decree);
+        resp.error = _rocksdb_wrapper->db_write(decree);
         if (resp.error == 0) {
             resp.new_value = new_value;
         }
@@ -347,20 +349,22 @@ public:
             } else {
                 set_key = check_key;
             }
-            resp.error = db_write_batch_put(decree,
-                                            set_key,
-                                            update.set_value,
-                                            static_cast<uint32_t>(update.set_expire_ts_seconds));
+            resp.error = _rocksdb_wrapper->db_write_batch_put(
+                decree,
+                set_key,
+                update.set_value,
+                static_cast<uint32_t>(update.set_expire_ts_seconds));
         } else {
             // check not passed, write empty record to update rocksdb's last flushed decree
-            resp.error = db_write_batch_put(decree, dsn::string_view(), dsn::string_view(), 0);
+            resp.error = _rocksdb_wrapper->db_write_batch_put(
+                decree, dsn::string_view(), dsn::string_view(), 0);
         }
         if (resp.error) {
             clear_up_batch_states(decree, resp.error);
             return resp.error;
         }
 
-        resp.error = db_write(decree);
+        resp.error = _rocksdb_wrapper->db_write(decree);
         if (resp.error) {
             clear_up_batch_states(decree, resp.error);
             return resp.error;
@@ -474,13 +478,13 @@ public:
                 ::dsn::blob key;
                 pegasus_generate_key(key, update.hash_key, m.sort_key);
                 if (m.operation == ::dsn::apps::mutate_operation::MO_PUT) {
-                    resp.error = db_write_batch_put(
+                    resp.error = _rocksdb_wrapper->db_write_batch_put(
                         decree, key, m.value, static_cast<uint32_t>(m.set_expire_ts_seconds));
                 } else {
                     dassert_f(m.operation == ::dsn::apps::mutate_operation::MO_DELETE,
                               "m.operation = %d",
                               m.operation);
-                    resp.error = db_write_batch_delete(decree, key);
+                    resp.error = _rocksdb_wrapper->db_write_batch_delete(decree, key);
                 }
 
                 // in case of failure, cancel mutations
@@ -489,7 +493,8 @@ public:
             }
         } else {
             // check not passed, write empty record to update rocksdb's last flushed decree
-            resp.error = db_write_batch_put(decree, dsn::string_view(), dsn::string_view(), 0);
+            resp.error = _rocksdb_wrapper->db_write_batch_put(
+                decree, dsn::string_view(), dsn::string_view(), 0);
         }
 
         if (resp.error) {
@@ -497,7 +502,7 @@ public:
             return resp.error;
         }
 
-        resp.error = db_write(decree);
+        resp.error = _rocksdb_wrapper->db_write(decree);
         if (resp.error) {
             clear_up_batch_states(decree, resp.error);
             return resp.error;
@@ -545,7 +550,7 @@ public:
                   const dsn::apps::update_request &update,
                   dsn::apps::update_response &resp)
     {
-        resp.error = db_write_batch_put_ctx(
+        resp.error = _rocksdb_wrapper->db_write_batch_put_ctx(
             ctx, update.key, update.value, static_cast<uint32_t>(update.expire_ts_seconds));
         _update_responses.emplace_back(&resp);
         return resp.error;
@@ -553,14 +558,14 @@ public:
 
     int batch_remove(int64_t decree, const dsn::blob &key, dsn::apps::update_response &resp)
     {
-        resp.error = db_write_batch_delete(decree, key);
+        resp.error = _rocksdb_wrapper->db_write_batch_delete(decree, key);
         _update_responses.emplace_back(&resp);
         return resp.error;
     }
 
     int batch_commit(int64_t decree)
     {
-        int err = db_write(decree);
+        int err = _rocksdb_wrapper->db_write(decree);
         clear_up_batch_states(decree, err);
         return err;
     }
@@ -591,7 +596,7 @@ private:
             _update_responses.clear();
         }
 
-        _batch.Clear();
+        _rocksdb_wrapper->clear_up_write_batch();
     }
 
     static dsn::blob composite_raw_key(dsn::string_view hash_key, dsn::string_view sort_key)
@@ -717,12 +722,10 @@ private:
 
     const std::string _primary_address;
     const uint32_t _pegasus_data_version;
+    std::unique_ptr<rocksdb_wrapper> _rocksdb_wrapper;
 
-    rocksdb::WriteBatch _batch;
     rocksdb::DB *_db;
     rocksdb::ColumnFamilyHandle *_data_cf;
-    rocksdb::ColumnFamilyHandle *_meta_cf;
-    rocksdb::WriteOptions _wt_opts;
     rocksdb::ReadOptions &_rd_opts;
     volatile uint32_t _default_ttl;
     ::dsn::perf_counter_wrapper &_pfc_recent_expire_count;

@@ -23,17 +23,22 @@
 #include <dsn/utility/string_view.h>
 #include <dsn/dist/replication/replica_base.h>
 #include <base/pegasus_value_schema.h>
+#include <rocksdb/write_batch.h>
+#include <rocksdb/db.h>
 
 namespace pegasus {
 namespace server {
 class pegasus_server_impl;
-class db_write_context;
-class db_get_context;
+struct db_write_context;
+struct db_get_context;
 
 class rocksdb_wrapper : public dsn::replication::replica_base
 {
 public:
-    explicit rocksdb_wrapper(pegasus_server_impl *server);
+    rocksdb_wrapper(pegasus_server_impl *server,
+                    rocksdb::DB *db,
+                    rocksdb::ColumnFamilyHandle *meta_cf,
+                    const uint32_t _pegasus_data_version);
 
     int db_write_batch_put(int64_t decree,
                            dsn::string_view raw_key,
@@ -51,11 +56,17 @@ public:
 
     int db_get(dsn::string_view raw_key, /*out*/ db_get_context *ctx);
 
+    void clear_up_write_batch();
 
 private:
     uint32_t db_expire_ts(uint32_t expire_ts);
 
     pegasus_value_generator _value_generator;
+    rocksdb::WriteBatch _write_batch;
+    rocksdb::DB *_db;
+    rocksdb::WriteOptions _wt_opts;
+    rocksdb::ColumnFamilyHandle *_meta_cf;
+    const uint32_t _pegasus_data_version;
 };
 } // namespace server
 } // namespace pegasus

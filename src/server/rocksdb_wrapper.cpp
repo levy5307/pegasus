@@ -24,11 +24,20 @@
 #include "logging_utils.h"
 #include "pegasus_write_service.h"
 #include "pegasus_write_service_impl.h"
+#include "meta_store.h"
 
 namespace pegasus {
 namespace server {
 
-rocksdb_wrapper::rocksdb_wrapper(pegasus_server_impl *server) : replica_base(server) {}
+rocksdb_wrapper::rocksdb_wrapper(pegasus_server_impl *server,
+                                 rocksdb::DB *db,
+                                 rocksdb::ColumnFamilyHandle *meta_cf,
+                                 const uint32_t pegasus_data_version)
+    : replica_base(server), _db(db), _meta_cf(meta_cf), _pegasus_data_version(pegasus_data_version)
+{
+    // disable write ahead logging as replication handles logging instead now
+    _wt_opts.disableWAL = true;
+}
 
 int rocksdb_wrapper::db_write_batch_put(int64_t decree,
                                         dsn::string_view raw_key,
@@ -77,7 +86,7 @@ int rocksdb_wrapper::db_write_batch_put_ctx(const db_write_context &ctx,
     rocksdb::SliceParts skey_parts(&skey, 1);
     rocksdb::SliceParts svalue = _value_generator.generate_value(
         _pegasus_data_version, value, db_expire_ts(expire_sec), new_timetag);
-    rocksdb::Status s = _batch.Put(skey_parts, svalue);
+    rocksdb::Status s = _write_batch.Put(skey_parts, svalue);
     if (dsn_unlikely(!s.ok())) {
         ::dsn::blob hash_key, sort_key;
         pegasus_restore_key(::dsn::blob(raw_key.data(), 0, raw_key.size()), hash_key, sort_key);
@@ -97,7 +106,7 @@ int rocksdb_wrapper::db_write_batch_delete(int64_t decree, dsn::string_view raw_
     FAIL_POINT_INJECT_F("db_write_batch_delete",
                         [](dsn::string_view) -> int { return FAIL_DB_WRITE_BATCH_DELETE; });
 
-    rocksdb::Status s = _batch.Delete(utils::to_rocksdb_slice(raw_key));
+    rocksdb::Status s = _write_batch.Delete(utils::to_rocksdb_slice(raw_key));
     if (dsn_unlikely(!s.ok())) {
         ::dsn::blob hash_key, sort_key;
         pegasus_restore_key(::dsn::blob(raw_key.data(), 0, raw_key.size()), hash_key, sort_key);
@@ -113,12 +122,12 @@ int rocksdb_wrapper::db_write_batch_delete(int64_t decree, dsn::string_view raw_
 
 int rocksdb_wrapper::db_write(int64_t decree)
 {
-    dassert(_batch.Count() != 0, "");
+    dassert(_write_batch.Count() != 0, "");
 
     FAIL_POINT_INJECT_F("db_write", [](dsn::string_view) -> int { return FAIL_DB_WRITE; });
 
     rocksdb::Status status =
-        _batch.Put(_meta_cf, meta_store::LAST_FLUSHED_DECREE, std::to_string(decree));
+        _write_batch.Put(_meta_cf, meta_store::LAST_FLUSHED_DECREE, std::to_string(decree));
     if (dsn_unlikely(!status.ok())) {
         derror_rocksdb("Write",
                        status.ToString(),
@@ -127,7 +136,7 @@ int rocksdb_wrapper::db_write(int64_t decree)
         return status.code();
     }
 
-    status = _db->Write(_wt_opts, &_batch);
+    status = _db->Write(_wt_opts, &_write_batch);
     if (dsn_unlikely(!status.ok())) {
         derror_rocksdb("Write", status.ToString(), "write rocksdb error, decree: {}", decree);
     }
@@ -162,6 +171,8 @@ int rocksdb_wrapper::db_get(dsn::string_view raw_key, /*out*/ db_get_context *ct
                    utils::c_escape_string(sort_key));
     return s.code();
 }
+
+void rocksdb_wrapper::clear_up_write_batch() { _write_batch.Clear(); }
 
 uint32_t rocksdb_wrapper::db_expire_ts(uint32_t expire_ts)
 {
