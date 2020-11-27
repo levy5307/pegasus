@@ -20,8 +20,8 @@
 #include "pegasus_server_test_base.h"
 #include "server/pegasus_server_write.h"
 #include "server/pegasus_write_service_impl.h"
-#include "message_utils.h"
 #include "server/rocksdb_wrapper.h"
+#include "message_utils.h"
 
 #include <dsn/utility/defer.h>
 #include <dsn/utility/fail_point.h>
@@ -129,8 +129,8 @@ TEST_F(pegasus_write_service_impl_test, put_verify_timetag)
     ASSERT_EQ(read_timestamp_from(raw_key), timestamp);
     std::string raw_value;
     dsn::blob user_value;
-    rocksdb::Status s =
-        _db->Get(_write_impl->_rocksdb_wrapper->_rd_opts, utils::to_rocksdb_slice(raw_key), &raw_value);
+    rocksdb::Status s = _db->Get(
+        _write_impl->_rocksdb_wrapper->_rd_opts, utils::to_rocksdb_slice(raw_key), &raw_value);
     pegasus_extract_user_data(_write_impl->_pegasus_data_version, std::move(raw_value), user_value);
     ASSERT_EQ(user_value.to_string(), "value_new");
 

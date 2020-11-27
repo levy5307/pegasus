@@ -20,6 +20,7 @@
 #include "base/pegasus_rpc_types.h"
 #include "pegasus_write_service.h"
 #include "pegasus_write_service_impl.h"
+#include "pegasus_server_impl.h"
 #include "capacity_unit_calculator.h"
 
 #include <dsn/cpp/message_utils.h>

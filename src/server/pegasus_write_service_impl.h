@@ -47,6 +47,7 @@ class pegasus_write_service::impl : public dsn::replication::replica_base
 {
 public:
     explicit impl(pegasus_server_impl *server);
+    ~impl();
 
     int empty_put(int64_t decree);
     int multi_put(const db_write_context &ctx,

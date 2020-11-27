@@ -32,11 +32,12 @@
 namespace pegasus {
 namespace server {
 dsn::error_code get_external_files_path(const std::string &bulk_load_dir,
-        const dsn::replication::bulk_load_metadata &metadata,/*out*/ std::vector<std::string> &files_path)
+                                        const dsn::replication::bulk_load_metadata &metadata,
+                                        /*out*/ std::vector<std::string> &files_path)
 {
     for (const auto &f_meta : metadata.files) {
         const std::string &file_name =
-                dsn::utils::filesystem::path_combine(bulk_load_dir, f_meta.name);
+            dsn::utils::filesystem::path_combine(bulk_load_dir, f_meta.name);
         if (dsn::utils::filesystem::verify_file(file_name, f_meta.md5, f_meta.size)) {
             files_path.emplace_back(file_name);
         } else {
@@ -55,6 +56,8 @@ pegasus_write_service::impl::impl(pegasus_server_impl *server)
     _rocksdb_wrapper = dsn::make_unique<rocksdb_wrapper>(
         server, server->_db, server->_meta_cf, _pegasus_data_version, server->_data_cf_rd_opts);
 }
+
+pegasus_write_service::impl::~impl() = default;
 
 int pegasus_write_service::impl::empty_put(int64_t decree)
 {

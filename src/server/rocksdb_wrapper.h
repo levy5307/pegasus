@@ -47,6 +47,7 @@ public:
                     rocksdb::ColumnFamilyHandle *meta_cf,
                     const uint32_t _pegasus_data_version,
                     rocksdb::ReadOptions &_rd_opts);
+    ~rocksdb_wrapper() = default;
 
     int write_batch_put(int64_t decree,
                         dsn::string_view raw_key,
