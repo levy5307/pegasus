@@ -21,36 +21,50 @@
 
 #include <dsn/utility/fail_point.h>
 
+#include "base/pegasus_key_schema.h"
 #include "logging_utils.h"
-#include "pegasus_write_service.h"
 #include "pegasus_write_service_impl.h"
 #include "meta_store.h"
 
 namespace pegasus {
 namespace server {
+int get_cluster_id_if_exists()
+{
+    // cluster_id is 0 if not configured, which means it will accept writes
+    // from any cluster as long as the timestamp is larger.
+    static auto cluster_id_res =
+        dsn::replication::get_duplication_cluster_id(dsn::replication::get_current_cluster_name());
+    static uint64_t cluster_id = cluster_id_res.is_ok() ? cluster_id_res.get_value() : 0;
+    return cluster_id;
+}
 
 rocksdb_wrapper::rocksdb_wrapper(pegasus_server_impl *server,
                                  rocksdb::DB *db,
                                  rocksdb::ColumnFamilyHandle *meta_cf,
-                                 const uint32_t pegasus_data_version)
-    : replica_base(server), _db(db), _meta_cf(meta_cf), _pegasus_data_version(pegasus_data_version)
+                                 const uint32_t pegasus_data_version,
+                                 rocksdb::ReadOptions &rd_opts)
+    : replica_base(server),
+      _db(db),
+      _rd_opts(rd_opts),
+      _meta_cf(meta_cf),
+      _pegasus_data_version(pegasus_data_version)
 {
     // disable write ahead logging as replication handles logging instead now
     _wt_opts.disableWAL = true;
 }
 
-int rocksdb_wrapper::db_write_batch_put(int64_t decree,
-                                        dsn::string_view raw_key,
-                                        dsn::string_view value,
-                                        uint32_t expire_sec)
+int rocksdb_wrapper::write_batch_put(int64_t decree,
+                                     dsn::string_view raw_key,
+                                     dsn::string_view value,
+                                     uint32_t expire_sec)
 {
-    return db_write_batch_put_ctx(db_write_context::empty(decree), raw_key, value, expire_sec);
+    return write_batch_put_ctx(db_write_context::empty(decree), raw_key, value, expire_sec);
 }
 
-int rocksdb_wrapper::db_write_batch_put_ctx(const db_write_context &ctx,
-                                            dsn::string_view raw_key,
-                                            dsn::string_view value,
-                                            uint32_t expire_sec)
+int rocksdb_wrapper::write_batch_put_ctx(const db_write_context &ctx,
+                                         dsn::string_view raw_key,
+                                         dsn::string_view value,
+                                         uint32_t expire_sec)
 {
     FAIL_POINT_INJECT_F("db_write_batch_put",
                         [](dsn::string_view) -> int { return FAIL_DB_WRITE_BATCH_PUT; });
@@ -65,7 +79,7 @@ int rocksdb_wrapper::db_write_batch_put_ctx(const db_write_context &ctx,
         !raw_key.empty()) {           // not an empty write
 
         db_get_context get_ctx;
-        int err = db_get(raw_key, &get_ctx);
+        int err = get(raw_key, &get_ctx);
         if (dsn_unlikely(err != 0)) {
             return err;
         }
@@ -101,7 +115,7 @@ int rocksdb_wrapper::db_write_batch_put_ctx(const db_write_context &ctx,
     return s.code();
 }
 
-int rocksdb_wrapper::db_write_batch_delete(int64_t decree, dsn::string_view raw_key)
+int rocksdb_wrapper::write_batch_delete(int64_t decree, dsn::string_view raw_key)
 {
     FAIL_POINT_INJECT_F("db_write_batch_delete",
                         [](dsn::string_view) -> int { return FAIL_DB_WRITE_BATCH_DELETE; });
@@ -120,7 +134,7 @@ int rocksdb_wrapper::db_write_batch_delete(int64_t decree, dsn::string_view raw_
     return s.code();
 }
 
-int rocksdb_wrapper::db_write(int64_t decree)
+int rocksdb_wrapper::write(int64_t decree)
 {
     dassert(_write_batch.Count() != 0, "");
 
@@ -143,7 +157,7 @@ int rocksdb_wrapper::db_write(int64_t decree)
     return status.code();
 }
 
-int rocksdb_wrapper::db_get(dsn::string_view raw_key, /*out*/ db_get_context *ctx)
+int rocksdb_wrapper::get(dsn::string_view raw_key, /*out*/ db_get_context *ctx)
 {
     FAIL_POINT_INJECT_F("db_get", [](dsn::string_view) -> int { return FAIL_DB_GET; });
 
@@ -156,12 +170,12 @@ int rocksdb_wrapper::db_get(dsn::string_view raw_key, /*out*/ db_get_context *ct
             ctx->expired = true;
         }
         return 0;
-    }
-    if (s.IsNotFound()) {
+    } else if (s.IsNotFound()) {
         // NotFound is an acceptable error
         ctx->found = false;
         return 0;
     }
+
     ::dsn::blob hash_key, sort_key;
     pegasus_restore_key(::dsn::blob(raw_key.data(), 0, raw_key.size()), hash_key, sort_key);
     derror_rocksdb("Get",
@@ -174,6 +188,28 @@ int rocksdb_wrapper::db_get(dsn::string_view raw_key, /*out*/ db_get_context *ct
 
 void rocksdb_wrapper::clear_up_write_batch() { _write_batch.Clear(); }
 
+void rocksdb_wrapper::set_default_ttl(uint32_t ttl)
+{
+    if (_default_ttl != ttl) {
+        _default_ttl = ttl;
+        ddebug_replica("update _default_ttl to {}.", ttl);
+    }
+}
+
+dsn::error_code rocksdb_wrapper::ingest_external_file(const std::vector<std::string> &sst_file_list,
+                                                      const int64_t decree)
+{
+    rocksdb::IngestExternalFileOptions ifo;
+    rocksdb::Status s = _db->IngestExternalFile(sst_file_list, ifo);
+    if (!s.ok()) {
+        derror_rocksdb("IngestExternalFile", s.ToString(), "decree = {}", decree);
+        return dsn::ERR_INGESTION_FAILED;
+    } else {
+        ddebug_rocksdb("IngestExternalFile", "Ingest files succeed, decree = {}", decree);
+        return dsn::ERR_OK;
+    }
+}
+
 uint32_t rocksdb_wrapper::db_expire_ts(uint32_t expire_ts)
 {
     // use '_default_ttl' when ttl is not set for this write operation.
@@ -183,5 +219,6 @@ uint32_t rocksdb_wrapper::db_expire_ts(uint32_t expire_ts)
 
     return expire_ts;
 }
+
 } // namespace server
 } // namespace pegasus

@@ -25,6 +25,7 @@
 
 #include <dsn/utility/fail_point.h>
 #include <dsn/utility/defer.h>
+#include <server/rocksdb_wrapper.h>
 
 namespace pegasus {
 namespace server {
@@ -87,7 +88,7 @@ public:
                 ASSERT_TRUE(_server_write->_write_svc->_batch_qps_perfcounters.empty());
                 ASSERT_TRUE(_server_write->_write_svc->_batch_latency_perfcounters.empty());
                 ASSERT_EQ(_server_write->_write_svc->_batch_start_time, 0);
-                ASSERT_EQ(_server_write->_write_svc->_impl->_batch.Count(), 0);
+                ASSERT_EQ(_server_write->_write_svc->_impl->_rocksdb_wrapper->_write_batch.Count(), 0);
                 ASSERT_EQ(_server_write->_write_svc->_impl->_update_responses.size(), 0);
 
                 ASSERT_EQ(put_rpc::mail_box().size(), put_rpc_cnt);
