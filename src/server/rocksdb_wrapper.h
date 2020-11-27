@@ -67,12 +67,12 @@ public:
                                          const int64_t decree);
 
 private:
+    uint32_t db_expire_ts(uint32_t expire_ts);
+
     friend class pegasus_write_service_impl_test;
     friend class pegasus_write_service_test;
     friend class pegasus_server_write_test;
     FRIEND_TEST(pegasus_write_service_impl_test, put_verify_timetag);
-
-    uint32_t db_expire_ts(uint32_t expire_ts);
 
     pegasus_value_generator _value_generator;
     rocksdb::WriteBatch _write_batch;
