@@ -161,7 +161,7 @@ TEST_F(pegasus_write_service_impl_test, verify_timetag_compatible_with_version_0
     dsn::fail::cfg("db_get", "100%1*return()");
     // if db_write_batch_put_ctx invokes db_get, this test must fail.
 
-    const_cast<uint32_t &>(_write_impl->_pegasus_data_version) = 0; // old version
+    const_cast<uint32_t &>(_rocksdb_wrapper->_pegasus_data_version) = 0; // old version
 
     dsn::blob raw_key;
     pegasus::pegasus_generate_key(
