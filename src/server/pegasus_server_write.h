@@ -51,19 +51,12 @@ public:
     void set_default_ttl(uint32_t ttl);
 
 private:
-    /// Delay replying for the batched requests until all of them complete.
-    int on_batched_writes(dsn::message_ex **requests, int count);
-
-private:
     friend class pegasus_server_write_test;
     friend class pegasus_write_service_test;
     friend class pegasus_write_service_impl_test;
     friend class rocksdb_wrapper_test;
 
     std::unique_ptr<pegasus_write_service> _write_svc;
-    std::vector<put_rpc> _put_rpc_batch;
-    std::vector<remove_rpc> _remove_rpc_batch;
-
     db_write_context _write_ctx;
     int64_t _decree;
 

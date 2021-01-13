@@ -294,6 +294,55 @@ void pegasus_write_service::batch_abort(int64_t decree, int err)
 
 void pegasus_write_service::set_default_ttl(uint32_t ttl) { _impl->set_default_ttl(ttl); }
 
+int pegasus_write_service::on_batched_writes(const db_write_context &write_ctx,
+                                             dsn::message_ex **requests,
+                                             int count)
+{
+    int err = 0;
+    int64_t decree = write_ctx.decree;
+
+    batch_prepare(decree);
+    for (int i = 0; i < count; ++i) {
+        dassert_f(requests[i] != nullptr, "request[{}] is null", i);
+
+        // Make sure all writes are batched even if they are failed,
+        // since we need to record the total qps and rpc latencies,
+        // and respond for all RPCs regardless of their result.
+
+        int local_err = 0;
+        dsn::task_code rpc_code(requests[i]->rpc_code());
+        if (rpc_code == dsn::apps::RPC_RRDB_RRDB_PUT) {
+            auto rpc = put_rpc::auto_reply(requests[i]);
+            local_err = on_single_put_in_batch(write_ctx, rpc);
+            _put_rpc_batch.emplace_back(std::move(rpc));
+        } else if (rpc_code == dsn::apps::RPC_RRDB_RRDB_REMOVE) {
+            auto rpc = remove_rpc::auto_reply(requests[i]);
+            local_err = on_single_remove_in_batch(write_ctx, rpc);
+            _remove_rpc_batch.emplace_back(std::move(rpc));
+        } else {
+            if (rpc_code == dsn::apps::RPC_RRDB_RRDB_MULTI_PUT ||
+                rpc_code == dsn::apps::RPC_RRDB_RRDB_MULTI_REMOVE ||
+                rpc_code == dsn::apps::RPC_RRDB_RRDB_INCR ||
+                rpc_code == dsn::apps::RPC_RRDB_RRDB_DUPLICATE) {
+                dfatal_f("rpc code not allow batch: {}", rpc_code.to_string());
+            } else {
+                dfatal_f("rpc code not handled: {}", rpc_code.to_string());
+            }
+        }
+
+        if (!err && local_err) {
+            err = local_err;
+        }
+    }
+
+    if (err == 0) {
+        err = batch_commit(decree);
+    } else {
+        batch_abort(decree, err);
+    }
+    return err;
+}
+
 int pegasus_write_service::on_single_put_in_batch(const db_write_context &write_ctx, put_rpc &rpc)
 {
     int err = batch_put(write_ctx, rpc.request(), rpc.response());
@@ -346,6 +395,10 @@ void pegasus_write_service::clear_up_batch_states()
     _batch_qps_perfcounters.clear();
     _batch_latency_perfcounters.clear();
     _batch_start_time = 0;
+
+    // reply the batched RPCs
+    _put_rpc_batch.clear();
+    _remove_rpc_batch.clear();
 }
 
 int pegasus_write_service::duplicate(int64_t decree,

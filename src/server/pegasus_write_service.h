@@ -165,6 +165,8 @@ public:
     // todo(zlw): make it private when refactor is done
     int on_single_put_in_batch(const db_write_context &write_ctx, put_rpc &rpc);
     int on_single_remove_in_batch(const db_write_context &write_ctx, remove_rpc &rpc);
+    /// Delay replying for the batched requests until all of them complete.
+    int on_batched_writes(const db_write_context &write_ctx, dsn::message_ex **requests, int count);
 
 private:
     void clear_up_batch_states();
@@ -201,6 +203,8 @@ private:
     int64_t _dup_lagging_write_threshold_ms;
 
     bool _verbose_log;
+    std::vector<put_rpc> _put_rpc_batch;
+    std::vector<remove_rpc> _remove_rpc_batch;
 
     ::dsn::perf_counter_wrapper _pfc_put_qps;
     ::dsn::perf_counter_wrapper _pfc_multi_put_qps;

@@ -89,61 +89,9 @@ int pegasus_server_write::on_batched_write_requests(dsn::message_ex **requests,
         return _write_svc->ingestion_files(_decree, rpc.request(), rpc.response());
     }
 
-    return on_batched_writes(requests, count);
+    return _write_svc->on_batched_writes(_write_ctx, requests, count);
 }
 
 void pegasus_server_write::set_default_ttl(uint32_t ttl) { _write_svc->set_default_ttl(ttl); }
-
-int pegasus_server_write::on_batched_writes(dsn::message_ex **requests, int count)
-{
-    int err = 0;
-    {
-        _write_svc->batch_prepare(_decree);
-
-        for (int i = 0; i < count; ++i) {
-            dassert(requests[i] != nullptr, "request[%d] is null", i);
-
-            // Make sure all writes are batched even if they are failed,
-            // since we need to record the total qps and rpc latencies,
-            // and respond for all RPCs regardless of their result.
-
-            int local_err = 0;
-            dsn::task_code rpc_code(requests[i]->rpc_code());
-            if (rpc_code == dsn::apps::RPC_RRDB_RRDB_PUT) {
-                auto rpc = put_rpc::auto_reply(requests[i]);
-                local_err = _write_svc->on_single_put_in_batch(_write_ctx, rpc);
-                _put_rpc_batch.emplace_back(std::move(rpc));
-            } else if (rpc_code == dsn::apps::RPC_RRDB_RRDB_REMOVE) {
-                auto rpc = remove_rpc::auto_reply(requests[i]);
-                local_err = _write_svc->on_single_remove_in_batch(_write_ctx, rpc);
-                _remove_rpc_batch.emplace_back(std::move(rpc));
-            } else {
-                if (rpc_code == dsn::apps::RPC_RRDB_RRDB_MULTI_PUT ||
-                    rpc_code == dsn::apps::RPC_RRDB_RRDB_MULTI_REMOVE ||
-                    rpc_code == dsn::apps::RPC_RRDB_RRDB_INCR ||
-                    rpc_code == dsn::apps::RPC_RRDB_RRDB_DUPLICATE) {
-                    dfatal("rpc code not allow batch: %s", rpc_code.to_string());
-                } else {
-                    dfatal("rpc code not handled: %s", rpc_code.to_string());
-                }
-            }
-
-            if (!err && local_err) {
-                err = local_err;
-            }
-        }
-
-        if (err == 0) {
-            err = _write_svc->batch_commit(_decree);
-        } else {
-            _write_svc->batch_abort(_decree, err);
-        }
-    }
-
-    // reply the batched RPCs
-    _put_rpc_batch.clear();
-    _remove_rpc_batch.clear();
-    return err;
-}
 } // namespace server
 } // namespace pegasus
