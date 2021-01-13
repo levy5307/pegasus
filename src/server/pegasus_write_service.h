@@ -149,17 +149,6 @@ public:
 
     /// For batch write.
 
-    // Prepare batch write.
-    void batch_prepare(int64_t decree);
-
-    // Commit batch write.
-    // \returns 0 if success, non-0 if failure.
-    // NOTE that if the batch contains no updates, 0 is returned.
-    int batch_commit(int64_t decree);
-
-    // Abort batch write.
-    void batch_abort(int64_t decree, int err);
-
     void set_default_ttl(uint32_t ttl);
 
     /// Delay replying for the batched requests until all of them complete.
@@ -170,6 +159,17 @@ private:
     // Ensure that the write request is directed to the right partition.
     // In verbose mode it will log for every request.
     void request_key_check(int64_t decree, dsn::message_ex *m, const dsn::blob &key);
+
+    // Prepare batch write.
+    void batch_prepare(int64_t decree);
+
+    // Commit batch write.
+    // \returns 0 if success, non-0 if failure.
+    // NOTE that if the batch contains no updates, 0 is returned.
+    int batch_commit(int64_t decree);
+
+    // Abort batch write.
+    void batch_abort(int64_t decree, int err);
 
     // Add PUT record in batch write.
     // \returns 0 if success, non-0 if failure.
