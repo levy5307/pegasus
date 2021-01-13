@@ -162,9 +162,6 @@ public:
 
     void set_default_ttl(uint32_t ttl);
 
-    // todo(zlw): make it private when refactor is done
-    int on_single_put_in_batch(const db_write_context &write_ctx, put_rpc &rpc);
-    int on_single_remove_in_batch(const db_write_context &write_ctx, remove_rpc &rpc);
     /// Delay replying for the batched requests until all of them complete.
     int on_batched_writes(const db_write_context &write_ctx, dsn::message_ex **requests, int count);
 
@@ -185,6 +182,9 @@ private:
     // \returns 0 if success, non-0 if failure.
     // NOTE that `resp` should not be moved or freed while the batch is not committed.
     int batch_remove(int64_t decree, const dsn::blob &key, dsn::apps::update_response &resp);
+
+    int on_single_put_in_batch(const db_write_context &write_ctx, put_rpc &rpc);
+    int on_single_remove_in_batch(const db_write_context &write_ctx, remove_rpc &rpc);
 
 private:
     friend class pegasus_write_service_test;
